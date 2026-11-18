@@ -2,33 +2,40 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { X, Settings2 } from "lucide-react";
+import { Settings2, X } from "lucide-react";
+
+import { CreateChallengeForm } from "../create-challenge-form";
+import type { Challenge } from "../challenge-form.types";
 
 type Props = {
-  children: React.ReactNode;
+  challenge: Challenge;
+  children?: React.ReactNode;
 };
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function ChallengeManagementDrawer({ children }: Props) {
+export function ChallengeManagementDrawer({
+  challenge,
+  children,
+}: Props) {
   const [isOpen, setIsOpen] = useState(false);
+
   const titleId = useId();
+
   const panelRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    const trigger = triggerRef.current;
     const previousOverflow = document.body.style.overflow;
 
     document.body.style.overflow = "hidden";
+
     panelRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (document.querySelector("dialog[open]")) return;
-
       if (event.key === "Escape") {
         setIsOpen(false);
         return;
@@ -36,8 +43,12 @@ export function ChallengeManagementDrawer({ children }: Props) {
 
       if (event.key === "Tab" && panelRef.current) {
         const items = Array.from(
-          panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
-        ).filter((element) => element.getClientRects().length > 0);
+          panelRef.current.querySelectorAll<HTMLElement>(
+            FOCUSABLE,
+          ),
+        ).filter(
+          (element) => element.getClientRects().length > 0,
+        );
 
         if (items.length === 0) {
           event.preventDefault();
@@ -66,7 +77,7 @@ export function ChallengeManagementDrawer({ children }: Props) {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
-      trigger?.focus();
+      triggerRef.current?.focus();
     };
   }, [isOpen]);
 
@@ -76,7 +87,9 @@ export function ChallengeManagementDrawer({ children }: Props) {
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(true)}
-        className="bg-amber-200 inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
       >
         <Settings2 className="size-4" />
         Manage challenge
@@ -84,27 +97,35 @@ export function ChallengeManagementDrawer({ children }: Props) {
 
       {isOpen && (
         <div className="fixed inset-0 z-50">
-          <div
-            aria-hidden="true"
+          {/* Backdrop */}
+          <button
+            type="button"
+            aria-label="Close drawer"
             onClick={() => setIsOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+            className="absolute inset-0 h-full w-full cursor-default bg-black/50 backdrop-blur-[2px]"
           />
 
+          {/* Drawer panel */}
           <aside
             ref={panelRef}
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-2xl outline-none animate-in slide-in-from-right duration-300 motion-reduce:animate-none"
+            className="absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-border bg-green-100 shadow-2xl outline-none animate-in slide-in-from-right duration-300 motion-reduce:animate-none"
           >
+            {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-5">
               <div>
-                <h2 id={titleId} className="text-lg font-semibold">
+                <h2
+                  id={titleId}
+                  className="text-lg font-semibold"
+                >
                   Manage challenge
                 </h2>
+
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Manage tasks and schedules.
+                  Update challenge information, tasks and schedules.
                 </p>
               </div>
 
@@ -118,7 +139,13 @@ export function ChallengeManagementDrawer({ children }: Props) {
               </button>
             </div>
 
+            {/* Drawer content */}
             <div className="flex-1 space-y-6 overflow-y-auto p-6">
+              <CreateChallengeForm
+                mode="update"
+                challenge={challenge}
+              />
+
               {children}
             </div>
           </aside>

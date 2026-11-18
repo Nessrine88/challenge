@@ -124,9 +124,7 @@ export function ChallengeCalendar({
     [startDate, endDate],
   );
 
-  const selectedTasks = selectedDate
-    ? tasks.filter((task) => isTaskScheduled(task, selectedDate))
-    : [];
+ const selectedTasks = tasks;
 
   const completedTaskIds = new Set(
     checkins

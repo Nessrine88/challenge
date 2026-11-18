@@ -12,6 +12,8 @@ import { DeleteChallengeButton } from "@/app/components/delete-challenge-button"
 import { challengeTasks } from "@/db/schema/task-schema";
 import { challengeSchedules } from "@/db/schema/schedule-schema";
 
+import type { Challenge } from "../challenge-form.types";
+
 import {
   getChallengeByIdAction,
   getChallengeParticipationAction,
@@ -21,7 +23,6 @@ import { getChallengeCalendarAction } from "@/actions/checkin.action";
 
 import { ChallengeMembershipButton } from "@/app/components/challenge-membership-button";
 import { CreateTaskForm } from "../create-task-form";
-import { ChallengeScheduleForm } from "../challenge-schedule-form";
 import { ChallengeCalendar } from "../challenge-calendar";
 import { ChallengeManagementDrawer } from "./challenge-management-drawer";
 
@@ -44,6 +45,17 @@ function formatDate(value: string | Date | null | undefined) {
   });
 }
 
+// Converts database dates into values suitable for HTML date inputs.
+function toDateInputValue(value: string | Date | null | undefined): string {
+  if (!value) return "";
+
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return value.slice(0, 10);
+}
+
 function Stat({
   label,
   value,
@@ -56,9 +68,7 @@ function Stat({
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 text-lg font-semibold tabular-nums">
-        {value}
-      </dd>
+      <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -66,7 +76,6 @@ function Stat({
 export default async function ChallengeDetailPage({ params }: Props) {
   const { id } = await params;
 
-  // 1. Authenticate user.
   const session = await auth.api.getSession({
     headers: await headers(),
   });
@@ -75,7 +84,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
     redirect("/sign-in");
   }
 
-  // 2. Retrieve challenge.
+  // 1. Get challenge
   const challengeResult = await getChallengeByIdAction(id);
 
   if (!challengeResult.success || !challengeResult.challenge) {
@@ -84,10 +93,10 @@ export default async function ChallengeDetailPage({ params }: Props) {
 
   const challenge = challengeResult.challenge;
 
-  // 3. Retrieve participation information.
-  const participationResult = await getChallengeParticipationAction(id);
-
   const isCreator = challenge.creatorId === session.user.id;
+
+  // 2. Get participation information
+  const participationResult = await getChallengeParticipationAction(id);
 
   const isJoined =
     participationResult.success && participationResult.isJoined;
@@ -96,10 +105,13 @@ export default async function ChallengeDetailPage({ params }: Props) {
     ? participationResult.participantCount
     : 0;
 
-  const isMember = isJoined || isCreator;
+  const isMember = isJoined;
 
-  // 4. Retrieve tasks and schedules for members.
-  const tasks = isMember
+  // The creator must also be able to load tasks, even if they haven't joined.
+  const canViewTasks = isMember || isCreator;
+
+  // 3. Load tasks and schedules
+  const tasks = canViewTasks
     ? await db
         .select({
           id: challengeTasks.id,
@@ -115,24 +127,46 @@ export default async function ChallengeDetailPage({ params }: Props) {
         .from(challengeTasks)
         .leftJoin(
           challengeSchedules,
-          eq(challengeTasks.id, challengeSchedules.taskId),
+          eq(challengeTasks.id, challengeSchedules.taskId)
         )
         .where(eq(challengeTasks.challengeId, id))
         .orderBy(challengeTasks.createdAt)
     : [];
 
-  // 5. Retrieve shared calendar.
+  // 4. Prepare the data expected by the management form.
+  const challengeForDrawer: Challenge = {
+    id: challenge.id,
+    title: challenge.title,
+    description: challenge.description ?? "",
+    category: challenge.category,
+    visibility: challenge.visibility,
+    startDate: toDateInputValue(challenge.startDate),
+    endDate: toDateInputValue(challenge.endDate) || null,
+
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      frequency: task.schedule?.frequency ?? "daily",
+      weekdays: task.schedule?.weekdays ?? [],
+      timezone: task.schedule?.timezone ?? "UTC",
+    })),
+  };
+
+  // 5. Load calendar data for participants.
   const calendarResult = isMember
     ? await getChallengeCalendarAction(id)
     : null;
 
-  const calendarCheckins =
-    calendarResult?.success ? calendarResult.checkins : [];
+  const calendarCheckins = calendarResult?.success
+    ? calendarResult.checkins
+    : [];
 
-  const calendarParticipants =
-    calendarResult?.success ? calendarResult.participants : [];
+  const calendarParticipants = calendarResult?.success
+    ? calendarResult.participants
+    : [];
 
-  // 6. Determine membership button visibility.
+  // 6. Membership conditions
   const canJoin =
     challenge.visibility === "public" &&
     challenge.status === "active" &&
@@ -145,7 +179,6 @@ export default async function ChallengeDetailPage({ params }: Props) {
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:py-10">
-      {/* Challenge header */}
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="space-y-6 p-6 sm:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -207,11 +240,14 @@ export default async function ChallengeDetailPage({ params }: Props) {
                     Challenge creator
                   </span>
 
-                  <ChallengeManagementDrawer>
+                  <ChallengeManagementDrawer
+                    challenge={challengeForDrawer}
+                  >
                     <div className="space-y-2">
                       <h3 className="text-base font-semibold">
                         Add a task
                       </h3>
+
                       <p className="text-sm text-muted-foreground">
                         Create a task and define its schedule.
                       </p>
@@ -221,80 +257,15 @@ export default async function ChallengeDetailPage({ params }: Props) {
                       <CreateTaskForm challengeId={id} />
                     </div>
 
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-base font-semibold">
-                          Task schedules
-                        </h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Configure when each task should repeat.
-                        </p>
-                      </div>
-
-                      {tasks.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                          No tasks yet. Add your first task above.
-                        </p>
-                      ) : (
-                        <ul className="divide-y divide-border rounded-xl border border-border">
-                          {tasks.map((task) => (
-                            <li key={task.id}>
-                              <details className="group">
-                                <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-4 py-4 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden">
-                                  <div className="min-w-0">
-                                    <p className="font-medium">
-                                      {task.title}
-                                    </p>
-
-                                    <p className="mt-1 text-xs capitalize text-muted-foreground">
-                                      {task.schedule?.frequency ?? "daily"}
-                                      {task.schedule?.timezone
-                                        ? ` · ${task.schedule.timezone}`
-                                        : ""}
-                                    </p>
-                                  </div>
-
-                                  <span className="text-muted-foreground transition-transform group-open:rotate-180">
-                                    ▾
-                                  </span>
-                                </summary>
-
-                                <div className="space-y-3 border-t border-border bg-secondary/20 px-4 py-4">
-                                  {task.description && (
-                                    <p className="text-sm text-muted-foreground">
-                                      {task.description}
-                                    </p>
-                                  )}
-
-                                  <ChallengeScheduleForm
-                                    challengeId={id}
-                                    taskId={task.id}
-                                    initialFrequency={
-                                      task.schedule?.frequency ?? "daily"
-                                    }
-                                    initialWeekdays={
-                                      task.schedule?.weekdays ?? []
-                                    }
-                                    initialTimezone={
-                                      task.schedule?.timezone ?? "UTC"
-                                    }
-                                  />
-                                </div>
-                              </details>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
                     <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
                       <div>
                         <h3 className="font-semibold text-destructive">
                           Danger zone
                         </h3>
+
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Deleting this challenge removes its tasks and check-ins
-                          for everyone.
+                          Deleting this challenge removes its tasks and
+                          check-ins for everyone.
                         </p>
                       </div>
 
@@ -308,17 +279,25 @@ export default async function ChallengeDetailPage({ params }: Props) {
 
           <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label="Participants" value={participantCount} />
-            <Stat label="Starts" value={formatDate(challenge.startDate)} />
-            <Stat label="Ends" value={formatDate(challenge.endDate)} />
+
+            <Stat
+              label="Starts"
+              value={formatDate(challenge.startDate)}
+            />
+
+            <Stat
+              label="Ends"
+              value={formatDate(challenge.endDate)}
+            />
+
             <Stat
               label="Tasks"
-              value={isMember ? tasks.length : "Members only"}
+              value={canViewTasks ? tasks.length : "Members only"}
             />
           </dl>
         </div>
       </section>
 
-      {/* Shared calendar */}
       {isMember ? (
         <section
           aria-label="Shared calendar"
@@ -344,6 +323,16 @@ export default async function ChallengeDetailPage({ params }: Props) {
             Become a participant to see the shared calendar and record your
             daily progress alongside everyone else.
           </p>
+
+          {canJoin && (
+            <div className="mt-5 flex justify-center">
+              <ChallengeMembershipButton
+                challengeId={id}
+                initialIsJoined={false}
+                initialParticipantCount={participantCount}
+              />
+            </div>
+          )}
         </section>
       )}
     </main>

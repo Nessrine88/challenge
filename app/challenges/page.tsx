@@ -57,7 +57,7 @@ export default async function ChallengesPage() {
                 {challenge.title}
               </h2>
 
-              <p className="mt-3 text-sm text-gray-600">
+              <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">
                 {challenge.description.length > 140
                   ? `${challenge.description.slice(0, 140)}...`
                   : challenge.description}
