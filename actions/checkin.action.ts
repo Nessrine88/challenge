@@ -1,17 +1,24 @@
-'use server'
+
+"use server";
+
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
+import { auth } from "@/lib/auth";
+
 import { challenges } from "@/db/schema/challenge-schema";
 import { challengeMembers } from "@/db/schema/membership-schema";
 import { challengeTasks } from "@/db/schema/task-schema";
 import { challengeSchedules } from "@/db/schema/schedule-schema";
 import { challengeCheckins } from "@/db/schema/checkin-schema";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { user } from "@/db/schema/auth-schema";
+
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
 
 function getLocalDate(timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -27,12 +34,34 @@ function getLocalDate(timezone: string): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+function isValidDate(date: string): boolean {
+  const parsedDate = new Date(`${date}T12:00:00.000Z`);
+
+  return (
+    !Number.isNaN(parsedDate.getTime()) &&
+    parsedDate.toISOString().slice(0, 10) === date
+  );
+}
+
+async function getCurrentSession() {
+  return auth.api.getSession({
+    headers: await headers(),
+  });
+}
+
+// --------------------------------------------------
+// CHECK-IN INPUT VALIDATION
+// --------------------------------------------------
 
 const checkinSchema = z.object({
   taskId: z.string().uuid(),
   checkinDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().max(1000).optional(),
 });
+
+// --------------------------------------------------
+// CREATE CHECK-IN
+// --------------------------------------------------
 
 export async function createCheckinAction(input: {
   taskId: string;
@@ -43,38 +72,30 @@ export async function createCheckinAction(input: {
 
   if (!parsed.success) {
     return {
-      success: false,
+      success: false as const,
       error: "Invalid check-in information.",
     };
   }
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     return {
-      success: false,
+      success: false as const,
       error: "You must be signed in.",
     };
   }
 
   const { taskId, checkinDate, note } = parsed.data;
 
-  // Validate that the date actually exists.
-  const parsedDate = new Date(`${checkinDate}T12:00:00.000Z`);
-
-  if (
-    Number.isNaN(parsedDate.getTime()) ||
-    parsedDate.toISOString().slice(0, 10) !== checkinDate
-  ) {
+  if (!isValidDate(checkinDate)) {
     return {
-      success: false,
+      success: false as const,
       error: "Invalid calendar date.",
     };
   }
 
-  // Find the task.
+  // Find task.
   const [task] = await db
     .select()
     .from(challengeTasks)
@@ -83,12 +104,12 @@ export async function createCheckinAction(input: {
 
   if (!task) {
     return {
-      success: false,
+      success: false as const,
       error: "Task not found.",
     };
   }
 
-  // Find its challenge.
+  // Find challenge.
   const [challenge] = await db
     .select()
     .from(challenges)
@@ -97,12 +118,12 @@ export async function createCheckinAction(input: {
 
   if (!challenge || challenge.status !== "active") {
     return {
-      success: false,
+      success: false as const,
       error: "Challenge is not active.",
     };
   }
 
-  // Check that the user is an active member.
+  // Check active membership.
   const [membership] = await db
     .select()
     .from(challengeMembers)
@@ -117,12 +138,12 @@ export async function createCheckinAction(input: {
 
   if (!membership) {
     return {
-      success: false,
+      success: false as const,
       error: "You are not an active participant.",
     };
   }
 
-  // Find the task schedule.
+  // Find task schedule.
   const [schedule] = await db
     .select()
     .from(challengeSchedules)
@@ -131,53 +152,57 @@ export async function createCheckinAction(input: {
 
   if (!schedule) {
     return {
-      success: false,
+      success: false as const,
       error: "This task has no schedule.",
     };
   }
 
-  // Validate the timezone and determine today's local date.
+  // Validate timezone.
   let today: string;
 
   try {
     today = getLocalDate(schedule.timezone);
   } catch {
     return {
-      success: false,
+      success: false as const,
       error: "Invalid schedule timezone.",
     };
   }
 
+  // Prevent future check-ins.
   if (checkinDate > today) {
     return {
-      success: false,
+      success: false as const,
       error: "You cannot check in for a future date.",
     };
   }
 
+  // Validate challenge dates.
   if (
     checkinDate < challenge.startDate ||
     (challenge.endDate && checkinDate > challenge.endDate)
   ) {
     return {
-      success: false,
+      success: false as const,
       error: "Date is outside the challenge period.",
     };
   }
 
-  // Check whether this task was scheduled on that date.
+  // Validate selected weekdays.
   if (schedule.frequency === "selected_days") {
-    const weekday = parsedDate.getUTCDay();
+    const weekday = new Date(
+      `${checkinDate}T12:00:00.000Z`,
+    ).getUTCDay();
 
     if (!schedule.weekdays.includes(weekday)) {
       return {
-        success: false,
+        success: false as const,
         error: "This task is not scheduled for that day.",
       };
     }
   }
 
-  // Insert the check-in.
+  // Insert check-in.
   const [checkin] = await db
     .insert(challengeCheckins)
     .values({
@@ -191,39 +216,146 @@ export async function createCheckinAction(input: {
 
   if (!checkin) {
     return {
-      success: false,
+      success: false as const,
       error: "You have already checked in for this task on that date.",
     };
   }
 
+  revalidatePath(`/challenges/${task.challengeId}`);
+
   return {
-    success: true,
+    success: true as const,
     checkin,
   };
 }
 
-export async function getChallengeCheckinsAction(challengeId: string) {
-  const parsed = z.string().uuid().safeParse(challengeId);
+// --------------------------------------------------
+// DELETE CHECK-IN (UNCHECK A TASK)
+// --------------------------------------------------
+
+export async function deleteCheckinAction(input: {
+  taskId: string;
+  checkinDate: string;
+}) {
+  const parsed = z
+    .object({
+      taskId: z.string().uuid(),
+      checkinDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    })
+    .safeParse(input);
 
   if (!parsed.success) {
     return {
-      success: false,
-      error: "Invalid challenge ID.",
+      success: false as const,
+      error: "Invalid check-in information.",
     };
   }
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     return {
-      success: false,
+      success: false as const,
       error: "You must be signed in.",
     };
   }
 
-  // Find the participant's active membership.
+  const { taskId, checkinDate } = parsed.data;
+
+  if (!isValidDate(checkinDate)) {
+    return {
+      success: false as const,
+      error: "Invalid calendar date.",
+    };
+  }
+
+  // Find task.
+  const [task] = await db
+    .select()
+    .from(challengeTasks)
+    .where(eq(challengeTasks.id, taskId))
+    .limit(1);
+
+  if (!task) {
+    return {
+      success: false as const,
+      error: "Task not found.",
+    };
+  }
+
+  // Find active membership belonging to current user.
+  const [membership] = await db
+    .select()
+    .from(challengeMembers)
+    .where(
+      and(
+        eq(challengeMembers.challengeId, task.challengeId),
+        eq(challengeMembers.userId, session.user.id),
+        isNull(challengeMembers.leftAt),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    return {
+      success: false as const,
+      error: "You are not an active participant.",
+    };
+  }
+
+  // Delete only this user's check-in.
+  const [deleted] = await db
+    .delete(challengeCheckins)
+    .where(
+      and(
+        eq(challengeCheckins.membershipId, membership.id),
+        eq(challengeCheckins.taskId, taskId),
+        eq(challengeCheckins.checkinDate, checkinDate),
+      ),
+    )
+    .returning({
+      id: challengeCheckins.id,
+    });
+
+  if (!deleted) {
+    return {
+      success: false as const,
+      error: "Check-in not found.",
+    };
+  }
+
+  revalidatePath(`/challenges/${task.challengeId}`);
+
+  return {
+    success: true as const,
+  };
+}
+
+// --------------------------------------------------
+// GET CURRENT USER'S CHECK-INS
+// --------------------------------------------------
+
+export async function getChallengeCheckinsAction(
+  challengeId: string,
+) {
+  const parsed = z.string().uuid().safeParse(challengeId);
+
+  if (!parsed.success) {
+    return {
+      success: false as const,
+      error: "Invalid challenge ID.",
+    };
+  }
+
+  const session = await getCurrentSession();
+
+  if (!session) {
+    return {
+      success: false as const,
+      error: "You must be signed in.",
+    };
+  }
+
   const [membership] = await db
     .select()
     .from(challengeMembers)
@@ -238,12 +370,11 @@ export async function getChallengeCheckinsAction(challengeId: string) {
 
   if (!membership) {
     return {
-      success: false,
+      success: false as const,
       error: "You are not an active participant.",
     };
   }
 
-  // Retrieve check-ins with their task titles.
   const checkins = await db
     .select({
       id: challengeCheckins.id,
@@ -267,42 +398,49 @@ export async function getChallengeCheckinsAction(challengeId: string) {
     .orderBy(challengeCheckins.checkinDate);
 
   return {
-    success: true,
+    success: true as const,
     checkins,
   };
 }
 
+// --------------------------------------------------
+// CREATE OR UPDATE TASK SCHEDULE
+// --------------------------------------------------
 
-const scheduleInputSchema = z.object({
-  challengeId: z.string().uuid(),
-  taskId: z.string().uuid(),
-  frequency: z.enum(["daily", "selected_days"]),
-  weekdays: z.array(z.number().int().min(0).max(6)),
-  timezone: z.string().min(1).max(64),
-}).superRefine((data, ctx) => {
-  if (
-    data.frequency === "daily" &&
-    data.weekdays.length !== 0
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Daily schedules must not specify weekdays.",
-      path: ["weekdays"],
-    });
-  }
+const scheduleInputSchema = z
+  .object({
+    challengeId: z.string().uuid(),
+    taskId: z.string().uuid(),
+    frequency: z.enum(["daily", "selected_days"]),
+    weekdays: z.array(z.number().int().min(0).max(6)),
+    timezone: z.string().min(1).max(64),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.frequency === "daily" &&
+      data.weekdays.length !== 0
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Daily schedules must not specify weekdays.",
+        path: ["weekdays"],
+      });
+    }
 
-  if (
-    data.frequency === "selected_days" &&
-    (data.weekdays.length === 0 ||
-      new Set(data.weekdays).size !== data.weekdays.length)
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Select at least one unique weekday.",
-      path: ["weekdays"],
-    });
-  }
-});
+    if (
+      data.frequency === "selected_days" &&
+      (
+        data.weekdays.length === 0 ||
+        new Set(data.weekdays).size !== data.weekdays.length
+      )
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Select at least one unique weekday.",
+        path: ["weekdays"],
+      });
+    }
+  });
 
 export async function createChallengeScheduleAction(input: {
   challengeId: string;
@@ -315,18 +453,16 @@ export async function createChallengeScheduleAction(input: {
 
   if (!parsed.success) {
     return {
-      success: false,
+      success: false as const,
       error: "Invalid schedule information.",
     };
   }
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     return {
-      success: false,
+      success: false as const,
       error: "You must be signed in.",
     };
   }
@@ -339,14 +475,14 @@ export async function createChallengeScheduleAction(input: {
     timezone,
   } = parsed.data;
 
-  // Validate the timezone.
+  // Validate timezone.
   try {
     new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
     });
   } catch {
     return {
-      success: false,
+      success: false as const,
       error: "Invalid timezone.",
     };
   }
@@ -360,12 +496,12 @@ export async function createChallengeScheduleAction(input: {
 
   if (!challenge || challenge.creatorId !== session.user.id) {
     return {
-      success: false,
+      success: false as const,
       error: "Only the challenge creator can configure schedules.",
     };
   }
 
-  // Verify that the task belongs to this challenge.
+  // Verify task belongs to challenge.
   const [task] = await db
     .select()
     .from(challengeTasks)
@@ -379,12 +515,12 @@ export async function createChallengeScheduleAction(input: {
 
   if (!task) {
     return {
-      success: false,
+      success: false as const,
       error: "Task not found in this challenge.",
     };
   }
 
-  // Create or update the task schedule.
+  // Insert or update schedule.
   const [schedule] = await db
     .insert(challengeSchedules)
     .values({
@@ -407,12 +543,18 @@ export async function createChallengeScheduleAction(input: {
   revalidatePath(`/challenges/${challengeId}`);
 
   return {
-    success: true,
+    success: true as const,
     schedule,
   };
 }
 
-export async function getChallengeCalendarAction(challengeId: string) {
+// --------------------------------------------------
+// GET SHARED CHALLENGE CALENDAR
+// --------------------------------------------------
+
+export async function getChallengeCalendarAction(
+  challengeId: string,
+) {
   const parsed = z.string().uuid().safeParse(challengeId);
 
   if (!parsed.success) {
@@ -422,9 +564,7 @@ export async function getChallengeCalendarAction(challengeId: string) {
     };
   }
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await getCurrentSession();
 
   if (!session) {
     return {
@@ -433,7 +573,7 @@ export async function getChallengeCalendarAction(challengeId: string) {
     };
   }
 
-  // 1. Verify that the challenge exists.
+  // Verify challenge exists.
   const [challenge] = await db
     .select({
       id: challenges.id,
@@ -450,12 +590,14 @@ export async function getChallengeCalendarAction(challengeId: string) {
     };
   }
 
-  // 2. Allow the creator or an active participant to view the calendar.
+  // Only creator or active participant can view calendar.
   const isCreator = challenge.creatorId === session.user.id;
 
   if (!isCreator) {
     const [membership] = await db
-      .select({ id: challengeMembers.id })
+      .select({
+        id: challengeMembers.id,
+      })
       .from(challengeMembers)
       .where(
         and(
@@ -474,7 +616,29 @@ export async function getChallengeCalendarAction(challengeId: string) {
     }
   }
 
-  // 3. Retrieve check-ins from every participant.
+ // Get active participants.
+// Get active participants.
+const participants = await db
+  .select({
+    membershipId: challengeMembers.id,
+    participantId: challengeMembers.userId,
+    participantUsername: user.username,
+  })
+  .from(challengeMembers)
+  .innerJoin(
+    user,
+    eq(challengeMembers.userId, user.id),
+  )
+  .where(
+    and(
+      eq(challengeMembers.challengeId, challengeId),
+      isNull(challengeMembers.leftAt),
+    ),
+  )
+  .orderBy(user.username);
+
+  // Get check-ins from all memberships.
+  // Historical check-ins are retained when someone leaves.
   const checkins = await db
     .select({
       id: challengeCheckins.id,
@@ -490,7 +654,10 @@ export async function getChallengeCalendarAction(challengeId: string) {
     .from(challengeCheckins)
     .innerJoin(
       challengeMembers,
-      eq(challengeCheckins.membershipId, challengeMembers.id),
+      eq(
+        challengeCheckins.membershipId,
+        challengeMembers.id,
+      ),
     )
     .innerJoin(
       user,
@@ -500,7 +667,9 @@ export async function getChallengeCalendarAction(challengeId: string) {
       challengeTasks,
       eq(challengeCheckins.taskId, challengeTasks.id),
     )
-    .where(eq(challengeTasks.challengeId, challengeId))
+    .where(
+      eq(challengeTasks.challengeId, challengeId),
+    )
     .orderBy(
       challengeCheckins.checkinDate,
       challengeTasks.createdAt,
@@ -508,6 +677,7 @@ export async function getChallengeCalendarAction(challengeId: string) {
 
   return {
     success: true as const,
+    participants,
     checkins,
   };
 }

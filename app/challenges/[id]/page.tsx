@@ -1,4 +1,6 @@
+
 export const instant = false;
+
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
@@ -21,6 +23,7 @@ import { ChallengeMembershipButton } from "@/app/components/challenge-membership
 import { CreateTaskForm } from "../create-task-form";
 import { ChallengeScheduleForm } from "../challenge-schedule-form";
 import { ChallengeCalendar } from "../challenge-calendar";
+import { ChallengeManagementDrawer } from "./challenge-management-drawer";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -28,8 +31,11 @@ type Props = {
 
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "No end date";
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return String(value);
+
   return date.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
@@ -38,13 +44,21 @@ function formatDate(value: string | Date | null | undefined) {
   });
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
   return (
     <div className="rounded-xl border border-border bg-background/60 px-4 py-3">
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
+      <dd className="mt-1 text-lg font-semibold tabular-nums">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -52,7 +66,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 export default async function ChallengeDetailPage({ params }: Props) {
   const { id } = await params;
 
-  // 1. Authenticate the user.
+  // 1. Authenticate user.
   const session = await auth.api.getSession({
     headers: await headers(),
   });
@@ -61,7 +75,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
     redirect("/sign-in");
   }
 
-  // 2. Retrieve the challenge.
+  // 2. Retrieve challenge.
   const challengeResult = await getChallengeByIdAction(id);
 
   if (!challengeResult.success || !challengeResult.challenge) {
@@ -74,15 +88,17 @@ export default async function ChallengeDetailPage({ params }: Props) {
   const participationResult = await getChallengeParticipationAction(id);
 
   const isCreator = challenge.creatorId === session.user.id;
+
   const isJoined =
     participationResult.success && participationResult.isJoined;
+
   const participantCount = participationResult.success
     ? participationResult.participantCount
     : 0;
 
   const isMember = isJoined || isCreator;
 
-  // 4. Retrieve tasks and their schedules (members only).
+  // 4. Retrieve tasks and schedules for members.
   const tasks = isMember
     ? await db
         .select({
@@ -105,30 +121,31 @@ export default async function ChallengeDetailPage({ params }: Props) {
         .orderBy(challengeTasks.createdAt)
     : [];
 
-  // 5. Retrieve shared calendar check-ins (members only).
+  // 5. Retrieve shared calendar.
   const calendarResult = isMember
     ? await getChallengeCalendarAction(id)
     : null;
 
-  const calendarCheckins = calendarResult?.success
-    ? calendarResult.checkins
-    : [];
+  const calendarCheckins =
+    calendarResult?.success ? calendarResult.checkins : [];
 
-  // 6. Determine whether the user can join.
+  const calendarParticipants =
+    calendarResult?.success ? calendarResult.participants : [];
+
+  // 6. Determine membership button visibility.
   const canJoin =
     challenge.visibility === "public" &&
     challenge.status === "active" &&
     !isCreator &&
     !isJoined;
 
-  // The creator manages the challenge and does not join or leave it.
   const showMembershipButton = !isCreator && (canJoin || isJoined);
 
   const isActive = challenge.status === "active";
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:py-10">
-      {/* Header */}
+      {/* Challenge header */}
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="space-y-6 p-6 sm:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -175,7 +192,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
               {showMembershipButton && (
                 <ChallengeMembershipButton
                   challengeId={id}
@@ -185,9 +202,106 @@ export default async function ChallengeDetailPage({ params }: Props) {
               )}
 
               {isCreator && (
-                <span className="rounded-lg border border-border bg-secondary px-4 py-2 text-sm font-medium">
-                  Challenge creator
-                </span>
+                <>
+                  <span className="rounded-lg border border-border bg-secondary px-4 py-2 text-sm font-medium">
+                    Challenge creator
+                  </span>
+
+                  <ChallengeManagementDrawer>
+                    <div className="space-y-2">
+                      <h3 className="text-base font-semibold">
+                        Add a task
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Create a task and define its schedule.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-border p-4">
+                      <CreateTaskForm challengeId={id} />
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-base font-semibold">
+                          Task schedules
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Configure when each task should repeat.
+                        </p>
+                      </div>
+
+                      {tasks.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                          No tasks yet. Add your first task above.
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-border rounded-xl border border-border">
+                          {tasks.map((task) => (
+                            <li key={task.id}>
+                              <details className="group">
+                                <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-4 py-4 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden">
+                                  <div className="min-w-0">
+                                    <p className="font-medium">
+                                      {task.title}
+                                    </p>
+
+                                    <p className="mt-1 text-xs capitalize text-muted-foreground">
+                                      {task.schedule?.frequency ?? "daily"}
+                                      {task.schedule?.timezone
+                                        ? ` · ${task.schedule.timezone}`
+                                        : ""}
+                                    </p>
+                                  </div>
+
+                                  <span className="text-muted-foreground transition-transform group-open:rotate-180">
+                                    ▾
+                                  </span>
+                                </summary>
+
+                                <div className="space-y-3 border-t border-border bg-secondary/20 px-4 py-4">
+                                  {task.description && (
+                                    <p className="text-sm text-muted-foreground">
+                                      {task.description}
+                                    </p>
+                                  )}
+
+                                  <ChallengeScheduleForm
+                                    challengeId={id}
+                                    taskId={task.id}
+                                    initialFrequency={
+                                      task.schedule?.frequency ?? "daily"
+                                    }
+                                    initialWeekdays={
+                                      task.schedule?.weekdays ?? []
+                                    }
+                                    initialTimezone={
+                                      task.schedule?.timezone ?? "UTC"
+                                    }
+                                  />
+                                </div>
+                              </details>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                      <div>
+                        <h3 className="font-semibold text-destructive">
+                          Danger zone
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Deleting this challenge removes its tasks and check-ins
+                          for everyone.
+                        </p>
+                      </div>
+
+                      <DeleteChallengeButton challengeId={id} />
+                    </div>
+                  </ChallengeManagementDrawer>
+                </>
               )}
             </div>
           </div>
@@ -204,120 +318,22 @@ export default async function ChallengeDetailPage({ params }: Props) {
         </div>
       </section>
 
-      {/* Members: calendar, plus the creator's tools beside it */}
+      {/* Shared calendar */}
       {isMember ? (
-        <div
-          className={
-            isCreator
-              ? "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]"
-              : "grid gap-6"
-          }
+        <section
+          aria-label="Shared calendar"
+          className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-6"
         >
-          <section
-            aria-label="Shared calendar"
-            className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-6"
-          >
-            <ChallengeCalendar
-              tasks={tasks}
-              checkins={calendarCheckins}
-              startDate={challenge.startDate}
-              endDate={challenge.endDate}
-              currentUserId={session.user.id}
-              isJoined={isJoined}
-            />
-          </section>
-
-          {isCreator && (
-            <aside className="space-y-4 lg:sticky lg:top-6">
-              <div className="px-1">
-                <h2 className="text-lg font-semibold">Manage challenge</h2>
-                <p className="text-sm text-muted-foreground">
-                  Add tasks and set when each one repeats.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <h3 className="mb-4 text-sm font-semibold">Add a task</h3>
-                <CreateTaskForm challengeId={id} />
-              </div>
-
-              <div className="rounded-2xl border border-border bg-card">
-                <div className="flex items-center justify-between border-b border-border px-5 py-3">
-                  <h3 className="text-sm font-semibold">Task schedules</h3>
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
-                    {tasks.length}
-                  </span>
-                </div>
-
-                {tasks.length === 0 ? (
-                  <p className="p-6 text-center text-sm text-muted-foreground">
-                    No tasks yet. Add your first task above.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {tasks.map((task) => (
-                      <li key={task.id}>
-                        <details className="group">
-                          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-5 py-4 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden">
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">
-                                {task.title}
-                              </p>
-                              <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                                {task.schedule?.frequency ?? "daily"}
-                                {task.schedule?.timezone
-                                  ? ` · ${task.schedule.timezone}`
-                                  : ""}
-                              </p>
-                            </div>
-                            <span
-                              aria-hidden="true"
-                              className="mt-1 text-muted-foreground transition-transform group-open:rotate-180"
-                            >
-                              ▾
-                            </span>
-                          </summary>
-
-                          <div className="space-y-3 border-t border-border bg-secondary/20 px-5 py-4">
-                            {task.description && (
-                              <p className="text-sm text-muted-foreground">
-                                {task.description}
-                              </p>
-                            )}
-
-                            <ChallengeScheduleForm
-                              challengeId={id}
-                              taskId={task.id}
-                              initialFrequency={
-                                task.schedule?.frequency ?? "daily"
-                              }
-                              initialWeekdays={task.schedule?.weekdays ?? []}
-                              initialTimezone={
-                                task.schedule?.timezone ?? "UTC"
-                              }
-                            />
-                          </div>
-                        </details>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Only the creator can see this */}
-              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
-                <h3 className="text-sm font-semibold text-destructive">
-                  Danger zone
-                </h3>
-                <p className="mb-4 mt-1 text-sm text-muted-foreground">
-                  Deleting this challenge removes its tasks and check-ins for
-                  everyone.
-                </p>
-                <DeleteChallengeButton challengeId={id} />
-              </div>
-            </aside>
-          )}
-        </div>
+          <ChallengeCalendar
+            tasks={tasks}
+            checkins={calendarCheckins}
+            participants={calendarParticipants}
+            startDate={challenge.startDate}
+            endDate={challenge.endDate}
+            currentUserId={session.user.id}
+            isJoined={isJoined}
+          />
+        </section>
       ) : (
         <section className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <h2 className="text-lg font-semibold">
