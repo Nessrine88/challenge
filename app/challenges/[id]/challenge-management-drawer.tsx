@@ -76,7 +76,7 @@ export function ChallengeManagementDrawer({ children }: Props) {
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
+        className="bg-amber-200 inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-secondary"
       >
         <Settings2 className="size-4" />
         Manage challenge
