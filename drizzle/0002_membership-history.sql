@@ -1,0 +1,1 @@
+ALTER TABLE "challenge_members" ADD COLUMN "left_at" timestamp;

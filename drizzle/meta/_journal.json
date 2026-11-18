@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794924253568,
+      "tag": "0000_initial_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794951065161,
+      "tag": "0001_challenge-members",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794954474363,
+      "tag": "0002_membership-history",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794954719985,
+      "tag": "0003_challenge-tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794984523285,
+      "tag": "0004_challenge-checkins",
+      "breakpoints": true
+    }
+  ]
+}
