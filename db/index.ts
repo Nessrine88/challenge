@@ -9,6 +9,7 @@ import * as membershipSchema from "./schema/membership-schema";
 import * as taskSchema from "./schema/task-schema";
 import * as scheduleSchema from "./schema/schedule-schema";
 import * as checkinSchema from "./schema/checkin-schema";
+import * as invitationSchema  from "better-auth/plugins";
 
 neonConfig.webSocketConstructor = ws;
 
@@ -19,6 +20,7 @@ const schema = {
   ...taskSchema,
   ...scheduleSchema,
   ...checkinSchema,
+  ...invitationSchema,
 };
 
 const pool = new Pool({
