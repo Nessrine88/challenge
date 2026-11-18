@@ -1,4 +1,6 @@
 
+"use client";
+
 import { ChallengeCheckinButton } from "./challenge-checkin-button";
 
 type CalendarTask = {
@@ -84,26 +86,43 @@ export function ChallengeCalendar({
   currentUserId,
   isJoined,
 }: Props) {
-  const fallbackEndDate = getLocalDate("UTC");
   const dates = getDates(
     startDate,
-    endDate ?? fallbackEndDate,
+    endDate ?? getLocalDate("UTC"),
   );
 
   return (
-    <section className="mt-8 space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold">Challenge calendar</h2>
-        <p className="text-sm text-muted-foreground">
-          Track daily task completion with other participants.
-        </p>
+    <section className="space-y-5 rounded-2xl border border-[#303B34] bg-[#111713] p-5 text-[#F1F5F2] md:p-7">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B9B91]">
+            Daily tracking
+          </p>
+          <h2 className="mt-1 text-xl font-semibold">
+            Challenge calendar
+          </h2>
+          <p className="mt-1 text-sm text-[#A3B2A8]">
+            Track your progress together, one day at a time.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3 text-xs text-[#A3B2A8]">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-[#399F7A]" />
+            Your completion
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-400" />
+            Other participants
+          </span>
+        </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border">
+      <div className="overflow-x-auto rounded-xl border border-[#303B34]">
         <table className="w-max min-w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-border">
-              <th className="sticky left-0 z-20 min-w-48 bg-background p-3 text-left">
+            <tr className="bg-[#19211D]">
+              <th className="sticky left-0 z-20 min-w-52 border-b border-[#303B34] bg-[#19211D] p-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9EADA3]">
                 Task
               </th>
 
@@ -113,13 +132,15 @@ export function ChallengeCalendar({
                 return (
                   <th
                     key={date}
-                    className="min-w-16 border-l border-border px-2 py-3 text-center"
+                    className="min-w-[68px] border-b border-l border-[#303B34] px-2 py-3 text-center"
                   >
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs font-medium text-[#9EADA3]">
                       {formatted.weekday}
                     </div>
-                    <div className="font-semibold">{formatted.day}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="mt-1 text-base font-semibold text-[#F1F5F2]">
+                      {formatted.day}
+                    </div>
+                    <div className="text-[10px] text-[#8B9B91]">
                       {formatted.month}
                     </div>
                   </th>
@@ -136,14 +157,21 @@ export function ChallengeCalendar({
               return (
                 <tr
                   key={task.id}
-                  className="border-b border-border last:border-0"
+                  className="border-b border-[#303B34] last:border-0 hover:bg-[#202A24]/50"
                 >
-                  <td className="sticky left-0 z-10 min-w-48 bg-background p-3">
-                    <div className="font-medium">{task.title}</div>
+                  <td className="sticky left-0 z-10 min-w-52 border-r border-[#303B34] bg-[#19211D] p-4">
+                    <p className="font-medium text-[#E4EBE6]">
+                      {task.title}
+                    </p>
                     {task.description && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 max-w-48 text-xs text-[#8B9B91]">
                         {task.description}
                       </p>
+                    )}
+                    {!task.schedule && (
+                      <span className="mt-2 inline-block text-[10px] text-amber-400">
+                        Schedule not configured
+                      </span>
                     )}
                   </td>
 
@@ -177,28 +205,34 @@ export function ChallengeCalendar({
                       date <= today &&
                       Boolean(task.schedule);
 
+                    const isToday = date === today;
+
                     return (
                       <td
                         key={`${task.id}-${date}`}
-                        className="border-l border-border p-2 text-center"
+                        className={`border-l border-[#303B34] p-2 text-center ${
+                          isToday ? "bg-amber-400/[0.04]" : ""
+                        }`}
                       >
                         {isScheduled && date <= today ? (
-                          <div className="flex min-w-10 flex-col items-center gap-1">
+                          <div className="flex min-w-10 flex-col items-center gap-1.5">
                             {canCheckIn ? (
-                              <ChallengeCheckinButton
-                                taskId={task.id}
-                                checkinDate={date}
-                                initialCompleted={currentUserCheckin}
-                              />
+                              <div className="flex items-center justify-center">
+                                <ChallengeCheckinButton
+                                  taskId={task.id}
+                                  checkinDate={date}
+                                  initialCompleted={currentUserCheckin}
+                                />
+                              </div>
                             ) : (
                               <div
-                                className={`flex h-8 w-8 items-center justify-center rounded-md border ${
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm ${
                                   currentUserCheckin
-                                    ? "border-emerald-500 bg-emerald-500 text-white"
-                                    : "border-border"
+                                    ? "border-[#399F7A] bg-[#399F7A] text-white"
+                                    : "border-[#354139] bg-[#202A24] text-[#65756B]"
                                 }`}
                               >
-                                {currentUserCheckin ? "✓" : ""}
+                                {currentUserCheckin ? "✓" : "–"}
                               </div>
                             )}
 
@@ -207,13 +241,15 @@ export function ChallengeCalendar({
                                 <span
                                   key={participant.id}
                                   title={participant.participantUsername}
-                                  className="h-1.5 w-1.5 rounded-full bg-blue-500"
+                                  className="h-1.5 w-1.5 rounded-full bg-blue-400"
                                 />
                               ))}
                             </div>
                           </div>
                         ) : (
-                          <div className="h-8 w-8" />
+                          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-[#46534B]">
+                            {isScheduled ? "·" : ""}
+                          </div>
                         )}
                       </td>
                     );
@@ -226,7 +262,7 @@ export function ChallengeCalendar({
               <tr>
                 <td
                   colSpan={dates.length + 1}
-                  className="p-8 text-center text-muted-foreground"
+                  className="p-12 text-center text-sm text-[#8B9B91]"
                 >
                   No tasks have been added yet.
                 </td>
@@ -236,9 +272,9 @@ export function ChallengeCalendar({
         </table>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Green checkmarks show your completed tasks. Blue dots represent other
-        participants who completed the same task.
+      <p className="text-xs text-[#8B9B91]">
+        Select an available cell to record your completion. Future dates
+        cannot be checked in.
       </p>
     </section>
   );

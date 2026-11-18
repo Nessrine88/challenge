@@ -1,4 +1,5 @@
 
+export const instant = false;
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPublicChallengesAction } from "@/actions/challenge.action";
