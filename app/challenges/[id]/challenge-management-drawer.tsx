@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -125,7 +124,8 @@ export function ChallengeManagementDrawer({
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Update challenge information, tasks and schedules.
+                  Update challenge information, tasks, schedules and
+                  participants.
                 </p>
               </div>
 

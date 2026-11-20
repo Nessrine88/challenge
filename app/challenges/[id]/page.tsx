@@ -1,5 +1,6 @@
 export const instant = false;
 
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
@@ -221,12 +222,16 @@ export default async function ChallengeDetailPage({ params }: Props) {
   const calendarParticipants =
     calendarResult?.success === true ? calendarResult.participants : [];
 
-  // Participant list (creator gets "Remove" buttons inside the component)
-  const membersResult = canViewTasks
+  /* ---------------------------------------------------------------------- */
+  /* 7b. Participants (shown inside the creator's management drawer)        */
+  /* ---------------------------------------------------------------------- */
+
+  const membersResult = isCreator
     ? await getChallengeMembersAction(id)
     : null;
 
-  const members = membersResult?.success === true ? membersResult.members : [];
+  const members =
+    membersResult?.success === true ? membersResult.members : [];
 
   /* ---------------------------------------------------------------------- */
   /* 8. Membership controls                                                 */
@@ -264,7 +269,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
         <div className="space-y-6 p-6 sm:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             {/* Challenge information */}
-            <div className="min-w-0 space-y-4">
+            <div className="min-w-0 flex-1 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={
@@ -295,21 +300,30 @@ export default async function ChallengeDetailPage({ params }: Props) {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                  {challenge.title}
-                </h1>
+              <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-2">
+                  <h1 className="text-balance break-words text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+                    {challenge.title}
+                  </h1>
 
-                {challenge.description && (
-                  <p className="max-w-2xl text-pretty leading-relaxed text-muted-foreground">
-                    {challenge.description}
-                  </p>
-                )}
+                  {challenge.description && (
+                    <p className="max-w-2xl text-pretty break-words leading-relaxed text-muted-foreground">
+                      {challenge.description}
+                    </p>
+                  )}
+                </div>
+
+                <Link
+                  href="/users"
+                  className="inline-flex shrink-0 items-center justify-center self-start rounded-full border bg-red-400 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                >
+                  INVITE PEOPLE
+                </Link>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex shrink-0 flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 md:shrink-0 md:justify-end">
               {/* Public challenges only: join / leave button */}
               {showMembershipButton && (canJoin || isJoined) && (
                 <ChallengeMembershipButton
@@ -342,6 +356,18 @@ export default async function ChallengeDetailPage({ params }: Props) {
                     <div className="rounded-xl border border-border p-4">
                       <CreateTaskForm challengeId={id} />
                     </div>
+
+                    {/* Participants */}
+                    {members.length > 0 && (
+                      <div className="rounded-xl border border-border bg-card p-4">
+                        <ChallengeMembersList
+                          challengeId={id}
+                          members={members}
+                          creatorId={challenge.creatorId}
+                          currentUserId={userId}
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
                       <div>
@@ -416,21 +442,6 @@ export default async function ChallengeDetailPage({ params }: Props) {
               />
             </div>
           )}
-        </section>
-      )}
-
-      {/* Participants (creator and members only) */}
-      {canViewTasks && members.length > 0 && (
-        <section
-          aria-label="Participants"
-          className="rounded-2xl border border-border bg-card p-4 sm:p-6"
-        >
-          <ChallengeMembersList
-            challengeId={id}
-            members={members}
-            creatorId={challenge.creatorId}
-            currentUserId={userId}
-          />
         </section>
       )}
     </main>
