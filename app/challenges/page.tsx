@@ -2,7 +2,7 @@ export const instant = false;
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, ArrowRight, CalendarDays, Users } from "lucide-react";
+import { Plus, ArrowRight, CalendarDays, Users, ArrowLeft } from "lucide-react";
 
 import { getPublicChallengesAction } from "@/actions/challenge.action";
 
@@ -22,6 +22,13 @@ export default async function ChallengesPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
+         <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <span aria-hidden="true">←</span>
+          Back to dashboard
+        </Link>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             Discover challenges
           </h1>
