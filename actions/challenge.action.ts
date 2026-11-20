@@ -11,6 +11,9 @@ import { challenges } from "@/db/schema/challenge-schema";
 import { challengeMembers } from "@/db/schema/membership-schema";
 import { challengeTasks } from "@/db/schema/task-schema";
 import { challengeSchedules } from "@/db/schema/schedule-schema";
+import { notifications } from "@/db/schema/notification-schema";
+import { user } from "@/db/schema/auth-schema";
+import { notifyChallengeMembers } from "@/lib/notifications";
 
 const initialTaskSchema = z.object({
   title: z.string().trim().min(3).max(120),
@@ -35,6 +38,28 @@ const createChallengeSchema = z
     message: "End date must be after or equal to start date.",
     path: ["endDate"],
   });
+
+/**
+ * Returns true when the user is an active participant (has a membership row
+ * that has not been left). Pending invitations must NOT have a membership
+ * row, so pending invitees are never treated as members.
+ */
+async function isActiveMember(challengeId: string, userId: string) {
+  const [membership] = await db
+    .select({ id: challengeMembers.id })
+    .from(challengeMembers)
+    .where(
+      and(
+        eq(challengeMembers.challengeId, challengeId),
+        eq(challengeMembers.userId, userId),
+        isNull(challengeMembers.leftAt),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(membership);
+}
+
 export async function createChallengeAction(input: unknown) {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -83,7 +108,7 @@ export async function createChallengeAction(input: unknown) {
         throw new Error("Challenge creation failed.");
       }
 
-      // 2. Automatically register creator as participant[cite: 1]
+      // 2. Automatically register creator as participant
       await tx.insert(challengeMembers).values({
         challengeId: challenge.id,
         userId: session.user.id,
@@ -180,8 +205,14 @@ export async function getChallengeByIdAction(id: string) {
     return { success: false as const, error: "Challenge not found." };
   }
 
+  // Private challenges: only the creator and active (accepted) participants.
+  // Return "not found" for everyone else so existence isn't leaked.
   if (challenge.visibility === "private" && challenge.creatorId !== session.user.id) {
-    return { success: false as const, error: "You don't have permission to view this challenge." };
+    const isMember = await isActiveMember(id, session.user.id);
+
+    if (!isMember) {
+      return { success: false as const, error: "Challenge not found." };
+    }
   }
 
   return { success: true as const, challenge };
@@ -229,6 +260,32 @@ export async function joinChallengeAction(challengeId: string) {
   }
 
   try {
+    const [challenge] = await db
+      .select({
+        visibility: challenges.visibility,
+        status: challenges.status,
+        maxParticipants: challenges.maxParticipants,
+      })
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!challenge) {
+      return { success: false as const, error: "Challenge not found." };
+    }
+
+    // Private challenges can only be joined by accepting an invitation.
+    if (challenge.visibility !== "public") {
+      return {
+        success: false as const,
+        error: "This challenge is private. You can only join by accepting an invitation.",
+      };
+    }
+
+    if (challenge.status !== "active") {
+      return { success: false as const, error: "This challenge is not accepting participants." };
+    }
+
     const [existingMembership] = await db
       .select()
       .from(challengeMembers)
@@ -277,19 +334,52 @@ export async function leaveChallengeAction(challengeId: string) {
   }
 
   try {
-    const [membership] = await db
-      .update(challengeMembers)
-      .set({ leftAt: new Date() })
-      .where(
-        and(
-          eq(challengeMembers.challengeId, challengeId),
-          eq(challengeMembers.userId, session.user.id),
-          isNull(challengeMembers.leftAt),
-        ),
-      )
-      .returning({ id: challengeMembers.id });
+    const [challenge] = await db
+      .select({ title: challenges.title, creatorId: challenges.creatorId })
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
 
-    if (!membership) {
+    if (!challenge) {
+      return { success: false as const, error: "Challenge not found." };
+    }
+
+    // The creator is always re-added as a member when viewing the challenge,
+    // so leaving makes no sense for them. They can delete it instead.
+    if (challenge.creatorId === session.user.id) {
+      return {
+        success: false as const,
+        error: "Creators can't leave their own challenge. Delete it instead.",
+      };
+    }
+
+    const left = await db.transaction(async (tx) => {
+      const [membership] = await tx
+        .update(challengeMembers)
+        .set({ leftAt: new Date() })
+        .where(
+          and(
+            eq(challengeMembers.challengeId, challengeId),
+            eq(challengeMembers.userId, session.user.id),
+            isNull(challengeMembers.leftAt),
+          ),
+        )
+        .returning({ id: challengeMembers.id });
+
+      if (!membership) return false;
+
+      // Tell everyone who is still in the challenge (the creator included).
+      await notifyChallengeMembers(tx, {
+        challengeId,
+        actorId: session.user.id,
+        type: "member_left",
+        message: `${session.user.name} left "${challenge.title}".`,
+      });
+
+      return true;
+    });
+
+    if (!left) {
       return { success: false as const, error: "You are not an active participant in this challenge." };
     }
 
@@ -301,6 +391,161 @@ export async function leaveChallengeAction(challengeId: string) {
   } catch (error) {
     console.error("Leave challenge error:", error);
     return { success: false as const, error: "Unable to leave this challenge." };
+  }
+}
+
+const removeMemberSchema = z.object({
+  challengeId: z.string().uuid(),
+  userId: z.string().min(1).max(128),
+});
+
+export async function removeChallengeMemberAction(input: unknown) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    return { success: false as const, error: "You must be signed in." };
+  }
+
+  const validation = removeMemberSchema.safeParse(input);
+
+  if (!validation.success) {
+    return { success: false as const, error: "Invalid request." };
+  }
+
+  const { challengeId, userId } = validation.data;
+
+  try {
+    const [challenge] = await db
+      .select({
+        id: challenges.id,
+        title: challenges.title,
+        creatorId: challenges.creatorId,
+      })
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!challenge) {
+      return { success: false as const, error: "Challenge not found." };
+    }
+
+    if (challenge.creatorId !== session.user.id) {
+      return { success: false as const, error: "Only the challenge creator can remove participants." };
+    }
+
+    if (userId === challenge.creatorId) {
+      return { success: false as const, error: "The creator can't be removed from their own challenge." };
+    }
+
+    const removed = await db.transaction(async (tx) => {
+      const [membership] = await tx
+        .update(challengeMembers)
+        .set({ leftAt: new Date() })
+        .where(
+          and(
+            eq(challengeMembers.challengeId, challengeId),
+            eq(challengeMembers.userId, userId),
+            isNull(challengeMembers.leftAt),
+          ),
+        )
+        .returning({ id: challengeMembers.id });
+
+      if (!membership) return false;
+
+      const [removedUser] = await tx
+        .select({ name: user.name })
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
+
+      const removedName = removedUser?.name ?? "A participant";
+
+      // 1. Tell the removed user.
+      await tx.insert(notifications).values({
+        recipientId: userId,
+        actorId: session.user.id,
+        challengeId,
+        type: "removed_from_challenge",
+        message: `You were removed from "${challenge.title}" by the challenge creator.`,
+      });
+
+      // 2. Tell everyone who is still in the challenge (except the creator,
+      //    who performed the action).
+      await notifyChallengeMembers(tx, {
+        challengeId,
+        actorId: session.user.id,
+        type: "member_removed",
+        message: `${removedName} was removed from "${challenge.title}".`,
+      });
+
+      return true;
+    });
+
+    if (!removed) {
+      return { success: false as const, error: "This user is not an active participant." };
+    }
+
+    revalidatePath(`/challenges/${challengeId}`);
+    revalidatePath("/challenges");
+    revalidatePath("/dashboard");
+    revalidatePath("/notifications");
+
+    return { success: true as const, message: "Participant removed." };
+  } catch (error) {
+    console.error("Remove member error:", error);
+    return { success: false as const, error: "Unable to remove this participant." };
+  }
+}
+
+export async function getChallengeMembersAction(challengeId: string) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    return { success: false as const, error: "You must be signed in." };
+  }
+
+  try {
+    const [challenge] = await db
+      .select({ creatorId: challenges.creatorId })
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!challenge) {
+      return { success: false as const, error: "Challenge not found." };
+    }
+
+    const isCreator = challenge.creatorId === session.user.id;
+
+    if (!isCreator && !(await isActiveMember(challengeId, session.user.id))) {
+      return { success: false as const, error: "Challenge not found." };
+    }
+
+    const members = await db
+      .select({
+        userId: user.id,
+        name: user.name,
+        username: user.username,
+        image: user.image,
+      })
+      .from(challengeMembers)
+      .innerJoin(user, eq(challengeMembers.userId, user.id))
+      .where(
+        and(
+          eq(challengeMembers.challengeId, challengeId),
+          isNull(challengeMembers.leftAt),
+        ),
+      )
+      .orderBy(user.name);
+
+    return { success: true as const, members };
+  } catch (error) {
+    console.error("Get challenge members error:", error);
+    return { success: false as const, error: "Unable to load participants." };
   }
 }
 
@@ -447,8 +692,12 @@ export async function getChallengeTasksAction(challengeId: string) {
       return { success: false as const, error: "Challenge not found." };
     }
 
-    if (challenge.visibility === "private" && challenge.creatorId !== session.user.id) {
-      return { success: false as const, error: "You cannot access this challenge." };
+    // Tasks are visible to the creator and active participants only,
+    // for both public and private challenges.
+    const isCreator = challenge.creatorId === session.user.id;
+
+    if (!isCreator && !(await isActiveMember(challengeId, session.user.id))) {
+      return { success: false as const, error: "Challenge not found." };
     }
 
     const tasks = await db
@@ -577,4 +826,3 @@ export async function updateChallengeAction(input: {
     };
   }
 }
-

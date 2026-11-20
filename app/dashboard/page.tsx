@@ -48,7 +48,7 @@ export default async function DashboardPage() {
             <p className="text-sm text-gray-500">Your workspace</p>
 
             <h1 className="text-3xl font-bold text-gray-900">
-              Welcome, {session.user.name}
+              Welcome, {session.user.username}
             </h1>
 
             <p className="mt-1 text-gray-600">

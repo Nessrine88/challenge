@@ -43,6 +43,13 @@
       "when": 1795018687449,
       "tag": "0005_early_omega_red",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795174110827,
+      "tag": "0006_yellow_songbird",
+      "breakpoints": true
     }
   ]
 }

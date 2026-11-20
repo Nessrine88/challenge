@@ -1,4 +1,3 @@
-
 export const instant = false;
 
 import { notFound, redirect } from "next/navigation";
@@ -17,6 +16,7 @@ import type { Challenge } from "../challenge-form.types";
 import {
   getChallengeByIdAction,
   getChallengeParticipationAction,
+  getChallengeMembersAction,
 } from "@/actions/challenge.action";
 
 import { getChallengeCalendarAction } from "@/actions/checkin.action";
@@ -25,6 +25,7 @@ import { ChallengeMembershipButton } from "@/app/components/challenge-membership
 import { CreateTaskForm } from "../create-task-form";
 import { ChallengeCalendar } from "../challenge-calendar";
 import { ChallengeManagementDrawer } from "./challenge-management-drawer";
+import { ChallengeMembersList } from "./challenge-members-list";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -68,6 +69,7 @@ function Stat({
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
+
       <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
     </div>
   );
@@ -75,6 +77,10 @@ function Stat({
 
 export default async function ChallengeDetailPage({ params }: Props) {
   const { id } = await params;
+
+  /* ---------------------------------------------------------------------- */
+  /* 1. Authentication                                                      */
+  /* ---------------------------------------------------------------------- */
 
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -84,7 +90,15 @@ export default async function ChallengeDetailPage({ params }: Props) {
     redirect("/sign-in");
   }
 
-  // 1. Get challenge
+  const userId = session.user.id;
+
+  /* ---------------------------------------------------------------------- */
+  /* 2. Load challenge                                                      */
+  /*    getChallengeByIdAction already returns "not found" for private      */
+  /*    challenges when the viewer is neither the creator nor an active     */
+  /*    participant (this covers pending invitees and non-members).         */
+  /* ---------------------------------------------------------------------- */
+
   const challengeResult = await getChallengeByIdAction(id);
 
   if (!challengeResult.success || !challengeResult.challenge) {
@@ -93,9 +107,12 @@ export default async function ChallengeDetailPage({ params }: Props) {
 
   const challenge = challengeResult.challenge;
 
-  const isCreator = challenge.creatorId === session.user.id;
+  const isCreator = challenge.creatorId === userId;
 
-  // 2. Get participation information
+  /* ---------------------------------------------------------------------- */
+  /* 3. Load membership                                                     */
+  /* ---------------------------------------------------------------------- */
+
   const participationResult = await getChallengeParticipationAction(id);
 
   const isJoined =
@@ -107,10 +124,44 @@ export default async function ChallengeDetailPage({ params }: Props) {
 
   const isMember = isJoined;
 
-  // The creator must also be able to load tasks, even if they haven't joined.
-  const canViewTasks = isMember || isCreator;
+  /* ---------------------------------------------------------------------- */
+  /* 4. Authorization                                                       */
+  /* ---------------------------------------------------------------------- */
 
-  // 3. Load tasks and schedules
+  const isPublic = challenge.visibility === "public";
+
+  /**
+   * Access rules:
+   *
+   * Public challenge:
+   * - Everyone authenticated can view the challenge details.
+   *
+   * Private challenge:
+   * - Creator can view.
+   * - Accepted participants (active members) can view.
+   * - Pending invitees cannot view the challenge.
+   * - Non-invited users cannot view the challenge.
+   */
+
+  const canAccessChallenge = isPublic || isCreator || isMember;
+
+  if (!canAccessChallenge) {
+    notFound();
+  }
+
+  /**
+   * Tasks:
+   * - Creator can view tasks.
+   * - Accepted participants can view tasks.
+   * - Public non-members can see challenge details, but not tasks.
+   */
+
+  const canViewTasks = isCreator || isMember;
+
+  /* ---------------------------------------------------------------------- */
+  /* 5. Load tasks and schedules                                            */
+  /* ---------------------------------------------------------------------- */
+
   const tasks = canViewTasks
     ? await db
         .select({
@@ -127,13 +178,16 @@ export default async function ChallengeDetailPage({ params }: Props) {
         .from(challengeTasks)
         .leftJoin(
           challengeSchedules,
-          eq(challengeTasks.id, challengeSchedules.taskId)
+          eq(challengeTasks.id, challengeSchedules.taskId),
         )
         .where(eq(challengeTasks.challengeId, id))
         .orderBy(challengeTasks.createdAt)
     : [];
 
-  // 4. Prepare the data expected by the management form.
+  /* ---------------------------------------------------------------------- */
+  /* 6. Prepare data for management drawer                                  */
+  /* ---------------------------------------------------------------------- */
+
   const challengeForDrawer: Challenge = {
     id: challenge.id,
     title: challenge.title,
@@ -153,35 +207,63 @@ export default async function ChallengeDetailPage({ params }: Props) {
     })),
   };
 
-  // 5. Load calendar data for participants.
+  /* ---------------------------------------------------------------------- */
+  /* 7. Calendar data                                                       */
+  /* ---------------------------------------------------------------------- */
+
   const calendarResult = isMember
     ? await getChallengeCalendarAction(id)
     : null;
 
-  const calendarCheckins = calendarResult?.success
-    ? calendarResult.checkins
-    : [];
+  const calendarCheckins =
+    calendarResult?.success === true ? calendarResult.checkins : [];
 
-  const calendarParticipants = calendarResult?.success
-    ? calendarResult.participants
-    : [];
+  const calendarParticipants =
+    calendarResult?.success === true ? calendarResult.participants : [];
 
-  // 6. Membership conditions
+  // Participant list (creator gets "Remove" buttons inside the component)
+  const membersResult = canViewTasks
+    ? await getChallengeMembersAction(id)
+    : null;
+
+  const members = membersResult?.success === true ? membersResult.members : [];
+
+  /* ---------------------------------------------------------------------- */
+  /* 8. Membership controls                                                 */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Public challenges:
+   * - Active
+   * - Not creator
+   * - Not already joined
+   *
+   * Private challenges:
+   * - Membership is granted by accepting an invitation.
+   * - No public Join button.
+   */
+
   const canJoin =
-    challenge.visibility === "public" &&
+    isPublic &&
     challenge.status === "active" &&
     !isCreator &&
     !isJoined;
 
-  const showMembershipButton = !isCreator && (canJoin || isJoined);
+  const showMembershipButton = isPublic && !isCreator;
 
   const isActive = challenge.status === "active";
 
+  /* ---------------------------------------------------------------------- */
+  /* 9. Render                                                              */
+  /* ---------------------------------------------------------------------- */
+
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:py-10">
+      {/* Challenge overview */}
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="space-y-6 p-6 sm:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+            {/* Challenge information */}
             <div className="min-w-0 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span
@@ -198,6 +280,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
                         : "size-1.5 rounded-full bg-muted-foreground"
                     }
                   />
+
                   {challenge.status}
                 </span>
 
@@ -225,8 +308,10 @@ export default async function ChallengeDetailPage({ params }: Props) {
               </div>
             </div>
 
+            {/* Actions */}
             <div className="flex shrink-0 flex-wrap items-center gap-3">
-              {showMembershipButton && (
+              {/* Public challenges only: join / leave button */}
+              {showMembershipButton && (canJoin || isJoined) && (
                 <ChallengeMembershipButton
                   challengeId={id}
                   initialIsJoined={isJoined}
@@ -234,6 +319,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
                 />
               )}
 
+              {/* Creator controls */}
               {isCreator && (
                 <>
                   <span className="rounded-lg border border-border bg-secondary px-4 py-2 text-sm font-medium">
@@ -277,18 +363,13 @@ export default async function ChallengeDetailPage({ params }: Props) {
             </div>
           </div>
 
+          {/* Statistics */}
           <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label="Participants" value={participantCount} />
 
-            <Stat
-              label="Starts"
-              value={formatDate(challenge.startDate)}
-            />
+            <Stat label="Starts" value={formatDate(challenge.startDate)} />
 
-            <Stat
-              label="Ends"
-              value={formatDate(challenge.endDate)}
-            />
+            <Stat label="Ends" value={formatDate(challenge.endDate)} />
 
             <Stat
               label="Tasks"
@@ -298,6 +379,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
         </div>
       </section>
 
+      {/* Calendar / join state */}
       {isMember ? (
         <section
           aria-label="Shared calendar"
@@ -309,7 +391,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
             participants={calendarParticipants}
             startDate={challenge.startDate}
             endDate={challenge.endDate}
-            currentUserId={session.user.id}
+            currentUserId={userId}
             isJoined={isJoined}
           />
         </section>
@@ -324,6 +406,7 @@ export default async function ChallengeDetailPage({ params }: Props) {
             daily progress alongside everyone else.
           </p>
 
+          {/* Only public challenges can be joined directly */}
           {canJoin && (
             <div className="mt-5 flex justify-center">
               <ChallengeMembershipButton
@@ -333,6 +416,21 @@ export default async function ChallengeDetailPage({ params }: Props) {
               />
             </div>
           )}
+        </section>
+      )}
+
+      {/* Participants (creator and members only) */}
+      {canViewTasks && members.length > 0 && (
+        <section
+          aria-label="Participants"
+          className="rounded-2xl border border-border bg-card p-4 sm:p-6"
+        >
+          <ChallengeMembersList
+            challengeId={id}
+            members={members}
+            creatorId={challenge.creatorId}
+            currentUserId={userId}
+          />
         </section>
       )}
     </main>

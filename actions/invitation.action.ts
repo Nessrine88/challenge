@@ -569,7 +569,6 @@ export async function respondToChallengeInvitationAction(
       return invitation.challengeId;
     });
 
-    revalidatePath("/invitations");
     revalidatePath("/challenges");
     revalidatePath(`/challenges/${challengeId}`);
     revalidatePath("/dashboard");
