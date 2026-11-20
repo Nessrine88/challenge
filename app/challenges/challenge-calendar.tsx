@@ -298,173 +298,354 @@ export function ChallengeCalendar({
       </div>
 
       {/* Calendar table */}
-      <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-max min-w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-muted/50">
-              <th className="sticky left-0 z-20 min-w-44 border-b border-border bg-muted/80 px-3 py-3 text-left text-xs font-medium text-muted-foreground backdrop-blur sm:min-w-52 sm:px-4">
-                Participant
+     {/* Calendar table */}
+<div className="overflow-x-auto rounded-xl border border-border">
+  {/* Desktop / Tablet: Participants as rows, dates as columns */}
+  <div className="hidden sm:block overflow-x-auto">
+    <table className="w-max min-w-full border-collapse text-sm">
+      <thead>
+        <tr className="bg-muted/50">
+          <th className="sticky left-0 z-20 min-w-44 border-b border-border bg-muted/80 px-3 py-3 text-left text-xs font-medium text-muted-foreground backdrop-blur sm:min-w-52 sm:px-4">
+            Participant
+          </th>
+
+          {dates.map((date) => {
+            const formatted = formatDate(date);
+            const isToday = date === getLocalDate("UTC");
+
+            return (
+              <th
+                key={date}
+                className={`min-w-[62px] border-b border-l border-border px-2 py-2.5 text-center ${
+                  isToday ? "bg-primary/5" : ""
+                }`}
+              >
+                <div
+                  className={`text-[11px] font-medium ${
+                    isToday ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {formatted.weekday}
+                </div>
+
+                <div
+                  className={`mt-0.5 text-base font-semibold ${
+                    isToday ? "text-primary" : "text-foreground"
+                  }`}
+                >
+                  {formatted.day}
+                </div>
+
+                <div className="text-[10px] text-muted-foreground">
+                  {formatted.month}
+                </div>
               </th>
+            );
+          })}
+        </tr>
+      </thead>
 
-              {dates.map((date) => {
-                const formatted = formatDate(date);
-                const isToday = date === getLocalDate("UTC");
+      <tbody>
+        {participants.map((participant) => {
+          const isCurrentUser =
+            participant.participantId === currentUserId;
 
-                return (
-                  <th
-                    key={date}
-                    className={`min-w-[62px] border-b border-l border-border px-2 py-2.5 text-center ${
-                      isToday ? "bg-primary/5" : ""
+          return (
+            <tr
+              key={participant.membershipId}
+              className="border-b border-border last:border-0 transition-colors hover:bg-muted/30"
+            >
+              {/* Participant */}
+              <td className="sticky left-0 z-10 min-w-44 border-r border-border bg-card px-3 py-3 sm:min-w-52 sm:px-4">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      isCurrentUser
+                        ? "bg-primary/10 text-primary"
+                        : "bg-secondary text-secondary-foreground"
                     }`}
                   >
-                    <div
-                      className={`text-[11px] font-medium ${
-                        isToday ? "text-primary" : "text-muted-foreground"
-                      }`}
-                    >
-                      {formatted.weekday}
-                    </div>
+                    {participant.participantUsername
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
 
-                    <div
-                      className={`mt-0.5 text-base font-semibold ${
-                        isToday ? "text-primary" : "text-foreground"
-                      }`}
-                    >
-                      {formatted.day}
-                    </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {participant.participantUsername}
+                      {isCurrentUser && (
+                        <span className="ml-1.5 text-xs text-primary">
+                          (You)
+                        </span>
+                      )}
+                    </p>
 
-                    <div className="text-[10px] text-muted-foreground">
-                      {formatted.month}
-                    </div>
-                  </th>
+                    <p className="text-[11px] text-muted-foreground">
+                      {isCurrentUser ? "Your progress" : "Participant"}
+                    </p>
+                  </div>
+                </div>
+              </td>
+
+              {/* Progress cells */}
+              {dates.map((date) => {
+                const progress = getProgress(
+                  participant.participantId,
+                  date,
+                );
+
+                const isToday = date === getLocalDate("UTC");
+                const isPastOrToday = date <= getLocalDate("UTC");
+
+                const canOpen =
+                  isCurrentUser &&
+                  isJoined &&
+                  isPastOrToday &&
+                  progress !== null;
+
+                return (
+                  <td
+                    key={`${participant.membershipId}-${date}`}
+                    className={`border-l border-border p-1.5 text-center sm:p-2 ${
+                      isToday ? "bg-primary/[0.03]" : ""
+                    }`}
+                  >
+                    {progress === null ? (
+                      <span className="text-muted-foreground/30">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canOpen}
+                        onClick={() => {
+                          if (canOpen) {
+                            setSelectedDate(date);
+                            setError(null);
+                          }
+                        }}
+                        title={
+                          canOpen
+                            ? "View and update your tasks"
+                            : `${progress}% completed`
+                        }
+                        className={`mx-auto flex size-9 items-center justify-center rounded-lg border text-[11px] font-semibold transition-all sm:size-10 ${getProgressColor(
+                          progress,
+                        )} ${
+                          canOpen
+                            ? "cursor-pointer hover:scale-105 hover:shadow-sm"
+                            : "cursor-default"
+                        }`}
+                      >
+                        {progress}%
+                      </button>
+                    )}
+                  </td>
                 );
               })}
             </tr>
-          </thead>
+          );
+        })}
 
-          <tbody>
-            {participants.map((participant) => {
-              const isCurrentUser =
-                participant.participantId === currentUserId;
+        {participants.length === 0 && (
+          <tr>
+            <td
+              colSpan={dates.length + 1}
+              className="px-6 py-12 text-center"
+            >
+              <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
+                <CalendarDays className="size-5 text-muted-foreground" />
+              </div>
 
-              return (
-                <tr
-                  key={participant.membershipId}
-                  className="border-b border-border last:border-0 transition-colors hover:bg-muted/30"
+              <p className="mt-3 text-sm font-medium">
+                No participants yet
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Participants will appear here once they join.
+              </p>
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Mobile: Dates as rows, participants as column headers */}
+  <div className="sm:hidden overflow-x-auto">
+    <table className="w-full border-collapse text-xs">
+      <thead>
+        <tr className="bg-muted/50">
+          {/* Sticky date header */}
+          <th className="sticky left-0 z-20 min-w-[76px] border-b border-r border-border bg-muted px-2 py-3 text-left font-medium text-muted-foreground">
+            Date
+          </th>
+
+          {participants.map((participant) => {
+            const isCurrentUser =
+              participant.participantId === currentUserId;
+
+            return (
+              <th
+                key={participant.membershipId}
+                className="min-w-[76px] border-b border-border px-2 py-3 text-center"
+              >
+                <div
+                  className={`mx-auto flex size-8 items-center justify-center rounded-full text-[10px] font-semibold ${
+                    isCurrentUser
+                      ? "bg-primary/10 text-primary"
+                      : "bg-secondary text-secondary-foreground"
+                  }`}
                 >
-                  {/* Participant */}
-                  <td className="sticky left-0 z-10 min-w-44 border-r border-border bg-card px-3 py-3 sm:min-w-52 sm:px-4">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                          isCurrentUser
-                            ? "bg-primary/10 text-primary"
-                            : "bg-secondary text-secondary-foreground"
+                  {participant.participantUsername
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+
+                <p
+                  className={`mt-1.5 max-w-[70px] truncate text-[11px] ${
+                    isCurrentUser
+                      ? "font-semibold text-primary"
+                      : "font-medium text-foreground"
+                  }`}
+                >
+                  {participant.participantUsername}
+                </p>
+
+                {isCurrentUser && (
+                  <span className="text-[9px] text-muted-foreground">
+                    You
+                  </span>
+                )}
+              </th>
+            );
+          })}
+        </tr>
+      </thead>
+
+      <tbody>
+        {dates.map((date) => {
+          const formatted = formatDate(date);
+          const isToday = date === getLocalDate("UTC");
+          const isPastOrToday = date <= getLocalDate("UTC");
+
+          return (
+            <tr
+              key={date}
+              className="border-b border-border last:border-0"
+            >
+              {/* Date on the left */}
+              <td
+                className={`sticky left-0 z-10 min-w-[76px] border-r border-border px-2 py-2.5 ${
+                  isToday ? "bg-primary/5" : "bg-card"
+                }`}
+              >
+                <div
+                  className={`text-[10px] ${
+                    isToday
+                      ? "font-medium text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {formatted.weekday}
+                </div>
+
+                <div
+                  className={`text-sm font-semibold ${
+                    isToday ? "text-primary" : "text-foreground"
+                  }`}
+                >
+                  {formatted.day} {formatted.month}
+                </div>
+
+                {isToday && (
+                  <span className="text-[9px] font-medium text-primary">
+                    Today
+                  </span>
+                )}
+              </td>
+
+              {/* Each participant's progress for this date */}
+              {participants.map((participant) => {
+                const isCurrentUser =
+                  participant.participantId === currentUserId;
+
+                const progress = getProgress(
+                  participant.participantId,
+                  date,
+                );
+
+                const canOpen =
+                  isCurrentUser &&
+                  isJoined &&
+                  isPastOrToday &&
+                  progress !== null;
+
+                return (
+                  <td
+                    key={`${participant.membershipId}-${date}`}
+                    className={`border-l border-border px-2 py-2 text-center ${
+                      isToday ? "bg-primary/[0.03]" : ""
+                    }`}
+                  >
+                    {progress === null ? (
+                      <span className="text-muted-foreground/30">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canOpen}
+                        onClick={() => {
+                          if (canOpen) {
+                            setSelectedDate(date);
+                            setError(null);
+                          }
+                        }}
+                        title={
+                          canOpen
+                            ? "View and update your tasks"
+                            : `${participant.participantUsername}: ${progress}%`
+                        }
+                        className={`mx-auto flex size-9 items-center justify-center rounded-lg border text-[10px] font-semibold transition-all ${getProgressColor(
+                          progress,
+                        )} ${
+                          canOpen
+                            ? "cursor-pointer active:scale-95"
+                            : "cursor-default"
                         }`}
                       >
-                        {participant.participantUsername
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {participant.participantUsername}
-                          {isCurrentUser && (
-                            <span className="ml-1.5 text-xs text-primary">
-                              (You)
-                            </span>
-                          )}
-                        </p>
-
-                        <p className="text-[11px] text-muted-foreground">
-                          {isCurrentUser ? "Your progress" : "Participant"}
-                        </p>
-                      </div>
-                    </div>
+                        {progress}%
+                      </button>
+                    )}
                   </td>
+                );
+              })}
+            </tr>
+          );
+        })}
 
-                  {/* Progress cells */}
-                  {dates.map((date) => {
-                    const progress = getProgress(
-                      participant.participantId,
-                      date,
-                    );
+        {/* Empty participants */}
+        {participants.length === 0 && (
+          <tr>
+            <td
+              colSpan={1}
+              className="px-4 py-10 text-center"
+            >
+              <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
+                <CalendarDays className="size-5 text-muted-foreground" />
+              </div>
 
-                    const isToday = date === getLocalDate("UTC");
-                    const isPastOrToday = date <= getLocalDate("UTC");
+              <p className="mt-3 text-sm font-medium">
+                No participants yet
+              </p>
 
-                    const canOpen =
-                      isCurrentUser &&
-                      isJoined &&
-                      isPastOrToday &&
-                      progress !== null;
-
-                    return (
-                      <td
-                        key={`${participant.membershipId}-${date}`}
-                        className={`border-l border-border p-1.5 text-center sm:p-2 ${
-                          isToday ? "bg-primary/[0.03]" : ""
-                        }`}
-                      >
-                        {progress === null ? (
-                          <span className="text-muted-foreground/30">—</span>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!canOpen}
-                            onClick={() => {
-                              if (canOpen) {
-                                setSelectedDate(date);
-                                setError(null);
-                              }
-                            }}
-                            title={
-                              canOpen
-                                ? "View and update your tasks"
-                                : `${progress}% completed`
-                            }
-                            className={`mx-auto flex size-9 items-center justify-center rounded-lg border text-[11px] font-semibold transition-all sm:size-10 ${
-                              getProgressColor(progress)
-                            } ${
-                              canOpen
-                                ? "cursor-pointer hover:scale-105 hover:shadow-sm"
-                                : "cursor-default"
-                            }`}
-                          >
-                            {progress}%
-                          </button>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-
-            {/* Empty participants */}
-            {participants.length === 0 && (
-              <tr>
-                <td
-                  colSpan={dates.length + 1}
-                  className="px-6 py-12 text-center"
-                >
-                  <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
-                    <CalendarDays className="size-5 text-muted-foreground" />
-                  </div>
-
-                  <p className="mt-3 text-sm font-medium">
-                    No participants yet
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Participants will appear here once they join.
-                  </p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Participants will appear here once they join.
+              </p>
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
       {/* Helper text */}
       <p className="text-xs text-muted-foreground">
