@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -6,6 +5,13 @@ import {
   createCheckinAction,
   deleteCheckinAction,
 } from "@/actions/checkin.action";
+import {
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Circle,
+  X,
+} from "lucide-react";
 
 type CalendarTask = {
   id: string;
@@ -124,7 +130,7 @@ export function ChallengeCalendar({
     [startDate, endDate],
   );
 
- const selectedTasks = tasks;
+  const selectedTasks = tasks;
 
   const completedTaskIds = new Set(
     checkins
@@ -182,8 +188,6 @@ export function ChallengeCalendar({
           return;
         }
 
-        // The server action persists the check-in.
-        // Refreshing the page will retrieve its complete database record.
         setCheckins((previous) => [
           ...previous,
           {
@@ -216,9 +220,7 @@ export function ChallengeCalendar({
       isTaskScheduled(task, date),
     );
 
-    if (scheduledTasks.length === 0) {
-      return null;
-    }
+    if (scheduledTasks.length === 0) return null;
 
     const completedCount = scheduledTasks.filter((task) =>
       checkins.some(
@@ -236,73 +238,102 @@ export function ChallengeCalendar({
 
   function getProgressColor(progress: number) {
     if (progress === 100) {
-      return "bg-[#399F7A] text-white border-[#399F7A]";
+      return "border-emerald-500 bg-emerald-500 text-white";
     }
 
     if (progress > 0) {
-      return "bg-[#284F3F] text-[#A8E2C8] border-[#477C63]";
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
     }
 
-    return "bg-[#202A24] text-[#829087] border-[#354139]";
+    return "border-border bg-secondary/50 text-muted-foreground";
   }
 
+  const dailyCompletion =
+    selectedTasks.length > 0
+      ? Math.round(
+          (selectedTasks.filter((task) =>
+            completedTaskIds.has(task.id),
+          ).length /
+            selectedTasks.length) *
+            100,
+        )
+      : 0;
+
   return (
-    <section className="space-y-5 rounded-2xl border border-[#303B34] bg-[#111713] p-5 text-[#F1F5F2] md:p-7">
+    <section className="space-y-5 rounded-2xl border border-border bg-card p-4 text-foreground sm:p-5 md:p-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8B9B91]">
-            Daily tracking
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <CalendarDays className="size-5" />
+          </div>
 
-          <h2 className="mt-1 text-xl font-semibold">
-            Challenge calendar
-          </h2>
-
-          <p className="mt-1 text-sm text-[#A3B2A8]">
-            Track your progress together, one day at a time.
-          </p>
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Challenge calendar
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Daily participant progress
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 text-xs text-[#A3B2A8]">
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#399F7A]" />
+            <span className="size-2.5 rounded-sm bg-emerald-500" />
             Completed
           </span>
 
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#284F3F]" />
+            <span className="size-2.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10" />
             In progress
+          </span>
+
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm border border-border bg-secondary" />
+            Not started
           </span>
         </div>
       </div>
 
-      {/* Participant calendar */}
-      <div className="overflow-x-auto rounded-xl border border-[#303B34]">
+      {/* Calendar table */}
+      <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-max min-w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-[#19211D]">
-              <th className="sticky left-0 z-20 min-w-48 border-b border-[#303B34] bg-[#19211D] p-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9EADA3]">
+            <tr className="bg-muted/50">
+              <th className="sticky left-0 z-20 min-w-44 border-b border-border bg-muted/80 px-3 py-3 text-left text-xs font-medium text-muted-foreground backdrop-blur sm:min-w-52 sm:px-4">
                 Participant
               </th>
 
               {dates.map((date) => {
                 const formatted = formatDate(date);
+                const isToday = date === getLocalDate("UTC");
 
                 return (
                   <th
                     key={date}
-                    className="min-w-[68px] border-b border-l border-[#303B34] px-2 py-3 text-center"
+                    className={`min-w-[62px] border-b border-l border-border px-2 py-2.5 text-center ${
+                      isToday ? "bg-primary/5" : ""
+                    }`}
                   >
-                    <div className="text-xs font-medium text-[#9EADA3]">
+                    <div
+                      className={`text-[11px] font-medium ${
+                        isToday ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    >
                       {formatted.weekday}
                     </div>
 
-                    <div className="mt-1 text-base font-semibold text-[#F1F5F2]">
+                    <div
+                      className={`mt-0.5 text-base font-semibold ${
+                        isToday ? "text-primary" : "text-foreground"
+                      }`}
+                    >
                       {formatted.day}
                     </div>
 
-                    <div className="text-[10px] text-[#8B9B91]">
+                    <div className="text-[10px] text-muted-foreground">
                       {formatted.month}
                     </div>
                   </th>
@@ -319,15 +350,16 @@ export function ChallengeCalendar({
               return (
                 <tr
                   key={participant.membershipId}
-                  className="border-b border-[#303B34] last:border-0 hover:bg-[#202A24]/40"
+                  className="border-b border-border last:border-0 transition-colors hover:bg-muted/30"
                 >
-                  <td className="sticky left-0 z-10 min-w-48 border-r border-[#303B34] bg-[#19211D] p-4">
-                    <div className="flex items-center gap-3">
+                  {/* Participant */}
+                  <td className="sticky left-0 z-10 min-w-44 border-r border-border bg-card px-3 py-3 sm:min-w-52 sm:px-4">
+                    <div className="flex items-center gap-2.5">
                       <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                        className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                           isCurrentUser
-                            ? "bg-[#285B46] text-[#B7E8D0]"
-                            : "bg-[#263A4B] text-[#A9C9E8]"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-secondary text-secondary-foreground"
                         }`}
                       >
                         {participant.participantUsername
@@ -336,22 +368,23 @@ export function ChallengeCalendar({
                       </div>
 
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-[#E4EBE6]">
+                        <p className="truncate text-sm font-medium">
                           {participant.participantUsername}
                           {isCurrentUser && (
-                            <span className="ml-1.5 text-xs text-[#80C7A5]">
-                              You
+                            <span className="ml-1.5 text-xs text-primary">
+                              (You)
                             </span>
                           )}
                         </p>
 
-                        <p className="text-[11px] text-[#829087]">
+                        <p className="text-[11px] text-muted-foreground">
                           {isCurrentUser ? "Your progress" : "Participant"}
                         </p>
                       </div>
                     </div>
                   </td>
 
+                  {/* Progress cells */}
                   {dates.map((date) => {
                     const progress = getProgress(
                       participant.participantId,
@@ -359,8 +392,7 @@ export function ChallengeCalendar({
                     );
 
                     const isToday = date === getLocalDate("UTC");
-                    const isPastOrToday =
-                      date <= getLocalDate("UTC");
+                    const isPastOrToday = date <= getLocalDate("UTC");
 
                     const canOpen =
                       isCurrentUser &&
@@ -371,12 +403,12 @@ export function ChallengeCalendar({
                     return (
                       <td
                         key={`${participant.membershipId}-${date}`}
-                        className={`border-l border-[#303B34] p-2 text-center ${
-                          isToday ? "bg-amber-400/[0.04]" : ""
+                        className={`border-l border-border p-1.5 text-center sm:p-2 ${
+                          isToday ? "bg-primary/[0.03]" : ""
                         }`}
                       >
                         {progress === null ? (
-                          <span className="text-[#46534B]">–</span>
+                          <span className="text-muted-foreground/30">—</span>
                         ) : (
                           <button
                             type="button"
@@ -392,11 +424,11 @@ export function ChallengeCalendar({
                                 ? "View and update your tasks"
                                 : `${progress}% completed`
                             }
-                            className={`mx-auto flex h-10 w-10 items-center justify-center rounded-lg border text-xs font-semibold transition ${
+                            className={`mx-auto flex size-9 items-center justify-center rounded-lg border text-[11px] font-semibold transition-all sm:size-10 ${
                               getProgressColor(progress)
                             } ${
                               canOpen
-                                ? "cursor-pointer hover:brightness-125"
+                                ? "cursor-pointer hover:scale-105 hover:shadow-sm"
                                 : "cursor-default"
                             }`}
                           >
@@ -410,13 +442,23 @@ export function ChallengeCalendar({
               );
             })}
 
+            {/* Empty participants */}
             {participants.length === 0 && (
               <tr>
                 <td
                   colSpan={dates.length + 1}
-                  className="p-12 text-center text-sm text-[#8B9B91]"
+                  className="px-6 py-12 text-center"
                 >
-                  No participants yet.
+                  <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted">
+                    <CalendarDays className="size-5 text-muted-foreground" />
+                  </div>
+
+                  <p className="mt-3 text-sm font-medium">
+                    No participants yet
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Participants will appear here once they join.
+                  </p>
                 </td>
               </tr>
             )}
@@ -424,15 +466,16 @@ export function ChallengeCalendar({
         </table>
       </div>
 
-      <p className="text-xs text-[#8B9B91]">
-        Select your progress percentage to view and update your scheduled tasks.
-        Other participants' progress is visible but read-only.
+      {/* Helper text */}
+      <p className="text-xs text-muted-foreground">
+        Select your progress to update your tasks. Other participants&apos;
+        progress is visible but read-only.
       </p>
 
       {/* Check-in modal */}
       {selectedDate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !savingTaskId) {
               setSelectedDate(null);
@@ -443,22 +486,24 @@ export function ChallengeCalendar({
             role="dialog"
             aria-modal="true"
             aria-labelledby="checkin-title"
-            className="w-full max-w-lg overflow-hidden rounded-2xl border border-[#35443A] bg-[#151D18] shadow-2xl"
+            className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl"
           >
-            <div className="flex items-start justify-between border-b border-[#303B34] p-5">
+            {/* Modal header */}
+            <div className="flex items-start justify-between border-b border-border p-4 sm:p-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#80C7A5]">
-                  Daily check-in
-                </p>
+                <div className="flex items-center gap-2 text-primary">
+                  <CalendarDays className="size-4" />
+                  <p className="text-xs font-medium">Daily check-in</p>
+                </div>
 
                 <h3
                   id="checkin-title"
-                  className="mt-1 text-xl font-semibold text-[#F1F5F2]"
+                  className="mt-1 text-lg font-semibold"
                 >
                   Your tasks
                 </h3>
 
-                <p className="mt-1 text-sm text-[#9EADA3]">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {formatDate(selectedDate).weekday},{" "}
                   {formatDate(selectedDate).day}{" "}
                   {formatDate(selectedDate).month}
@@ -469,16 +514,18 @@ export function ChallengeCalendar({
                 type="button"
                 disabled={Boolean(savingTaskId)}
                 onClick={() => setSelectedDate(null)}
-                className="rounded-lg p-2 text-[#9EADA3] transition hover:bg-[#26332B] hover:text-white"
+                className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close check-in"
+                title="Close"
               >
-                ✕
+                <X className="size-4" />
               </button>
             </div>
 
-            <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5">
+            {/* Tasks */}
+            <div className="max-h-[60vh] space-y-2.5 overflow-y-auto p-4 sm:p-5">
               {selectedTasks.length === 0 ? (
-                <p className="py-8 text-center text-sm text-[#9EADA3]">
+                <p className="py-8 text-center text-sm text-muted-foreground">
                   No tasks are scheduled for this day.
                 </p>
               ) : (
@@ -491,46 +538,52 @@ export function ChallengeCalendar({
                       key={task.id}
                       type="button"
                       disabled={Boolean(savingTaskId)}
-                      onClick={() =>
-                        toggleTask(task.id, selectedDate)
-                      }
-                      className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition ${
+                      onClick={() => toggleTask(task.id, selectedDate)}
+                      className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-all sm:p-4 ${
                         completed
-                          ? "border-[#399F7A]/60 bg-[#214535]/40"
-                          : "border-[#354139] bg-[#1C2620] hover:border-[#557263]"
-                      }`}
+                          ? "border-emerald-500/30 bg-emerald-500/[0.06]"
+                          : "border-border bg-card hover:border-primary/30 hover:bg-muted/40"
+                      } disabled:cursor-not-allowed disabled:opacity-70`}
                     >
+                      {/* Checkbox */}
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm ${
+                        className={`flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors ${
                           completed
-                            ? "border-[#399F7A] bg-[#399F7A] text-white"
-                            : "border-[#617168] text-transparent"
+                            ? "border-emerald-500 bg-emerald-500 text-white"
+                            : "border-border bg-background text-transparent"
                         }`}
                       >
-                        {isSaving ? "…" : "✓"}
+                        {isSaving ? (
+                          <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          <Check className="size-3.5" />
+                        )}
                       </span>
 
+                      {/* Task info */}
                       <span className="min-w-0 flex-1">
                         <span
-                          className={`block font-medium ${
+                          className={`block text-sm font-medium ${
                             completed
-                              ? "text-[#B7E8D0]"
-                              : "text-[#E4EBE6]"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-foreground"
                           }`}
                         >
                           {task.title}
                         </span>
 
                         {task.description && (
-                          <span className="mt-1 block text-xs text-[#8B9B91]">
+                          <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                             {task.description}
                           </span>
                         )}
                       </span>
 
+                      {/* Status */}
                       {completed && (
-                        <span className="text-xs font-medium text-[#80C7A5]">
-                          Done
+                        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3.5" />
+                          <span className="hidden sm:inline">Done</span>
                         </span>
                       )}
                     </button>
@@ -538,46 +591,50 @@ export function ChallengeCalendar({
                 })
               )}
 
+              {/* Error notification — preserved */}
               {error && (
-                <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                <p
+                  role="alert"
+                  className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
+                >
                   {error}
                 </p>
               )}
             </div>
 
-            <div className="border-t border-[#303B34] p-5">
+            {/* Progress footer */}
+            <div className="border-t border-border bg-muted/20 p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between text-sm">
-                <span className="text-[#9EADA3]">Daily completion</span>
+                <span className="text-muted-foreground">
+                  Daily completion
+                </span>
 
-                <span className="font-semibold text-[#80C7A5]">
-                  {selectedTasks.length > 0
-                    ? Math.round(
-                        (selectedTasks.filter((task) =>
-                          completedTaskIds.has(task.id),
-                        ).length /
-                          selectedTasks.length) *
-                          100,
-                      )
-                    : 0}
-                  %
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {dailyCompletion}%
                 </span>
               </div>
 
-              <div className="h-2 overflow-hidden rounded-full bg-[#29342D]">
+              <div className="h-2 overflow-hidden rounded-full bg-secondary">
                 <div
-                  className="h-full rounded-full bg-[#399F7A] transition-all duration-300"
-                  style={{
-                    width: `${
-                      selectedTasks.length > 0
-                        ? (selectedTasks.filter((task) =>
-                            completedTaskIds.has(task.id),
-                          ).length /
-                            selectedTasks.length) *
-                          100
-                        : 0
-                    }%`,
-                  }}
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                  style={{ width: `${dailyCompletion}%` }}
                 />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {selectedTasks.filter((task) =>
+                    completedTaskIds.has(task.id),
+                  ).length}{" "}
+                  of {selectedTasks.length} tasks
+                </span>
+
+                {dailyCompletion === 100 && selectedTasks.length > 0 && (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="size-3.5" />
+                    All completed
+                  </span>
+                )}
               </div>
             </div>
           </div>

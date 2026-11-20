@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   ilike,
+  inArray,
   isNull,
   ne,
   or,
@@ -164,17 +165,32 @@ export async function getInviteableChallengesAction() {
     };
   }
 
-  try {
+    try {
+    // Challenges the user is currently an active participant in
+    const joinedChallengeIds = db
+      .select({ id: challengeMembers.challengeId })
+      .from(challengeMembers)
+      .where(
+        and(
+          eq(challengeMembers.userId, currentUser.id),
+          isNull(challengeMembers.leftAt)
+        )
+      );
+
     const results = await db
       .select({
         id: challenges.id,
         title: challenges.title,
+        visibility: challenges.visibility,
       })
       .from(challenges)
       .where(
         and(
-          eq(challenges.creatorId, currentUser.id),
-          eq(challenges.status, "active")
+          eq(challenges.status, "active"),
+          or(
+            eq(challenges.creatorId, currentUser.id),
+            inArray(challenges.id, joinedChallengeIds)
+          )
         )
       )
       .orderBy(desc(challenges.createdAt));
@@ -246,10 +262,24 @@ export async function sendChallengeInvitationAction(input: unknown) {
         throw new Error("Challenge not found.");
       }
 
-      if (challenge.creatorId !== currentUser.id) {
-        throw new Error(
-          "Only the challenge creator can invite users."
-        );
+            if (challenge.creatorId !== currentUser.id) {
+        const [inviterMembership] = await tx
+          .select({ id: challengeMembers.id })
+          .from(challengeMembers)
+          .where(
+            and(
+              eq(challengeMembers.challengeId, challengeId),
+              eq(challengeMembers.userId, currentUser.id),
+              isNull(challengeMembers.leftAt)
+            )
+          )
+          .limit(1);
+
+        if (!inviterMembership) {
+          throw new Error(
+            "Only participants of this challenge can invite users."
+          );
+        }
       }
 
       if (challenge.status !== "active") {

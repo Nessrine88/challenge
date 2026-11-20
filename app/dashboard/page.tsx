@@ -1,18 +1,26 @@
-
 export const instant = false;
 
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import {
+  ArrowRight,
+  Plus,
+  Compass,
+  Mail,
+  UserRound,
+  Trophy,
+  CalendarDays,
+  Users,
+  Sparkles,
+} from "lucide-react";
+
 import { auth } from "@/lib/auth";
 
-import {
-  getMyChallengesAction,
+import { getMyChallengesAction } from "@/actions/challenge.action";
+import { getPendingInvitationCountAction } from "@/actions/invitation.action";
 
-} from "@/actions/challenge.action";
-
-import   {getPendingInvitationCountAction} from "@/actions/invitation.action";
 import { SignOutButton } from "../components/sign-out-button";
 
 export default async function DashboardPage() {
@@ -24,7 +32,6 @@ export default async function DashboardPage() {
     redirect("/sign-in");
   }
 
-  // Fetch dashboard data
   const [challengesResult, invitationsResult] = await Promise.all([
     getMyChallengesAction(),
     getPendingInvitationCountAction(),
@@ -38,207 +45,265 @@ export default async function DashboardPage() {
     ? invitationsResult.count
     : 0;
 
+  const navigationCards = [
+    {
+      title: "Create challenge",
+      description: "Turn your next goal into a shared challenge.",
+      href: "/challenges/new",
+      icon: Plus,
+      primary: true,
+    },
+    {
+      title: "Discover challenges",
+      description: "Explore challenges and find your next goal.",
+      href: "/challenges",
+      icon: Compass,
+      primary: false,
+    },
+    {
+      title: "Invitations",
+      description: "View and respond to challenge invitations.",
+      href: "/invitations",
+      icon: Mail,
+      primary: false,
+      badge: pendingInvitationsCount,
+    },
+    {
+      title: "My profile",
+      description: "Manage your account information.",
+      href: "/profile",
+      icon: UserRound,
+      primary: false,
+    },
+  ];
+
   return (
-    <main className="min-h-screen bg-gray-50 px-6 py-10">
-      <div className="mx-auto max-w-6xl">
-
+    <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:py-10">
+      <div className="mx-auto max-w-6xl space-y-8">
         {/* Header */}
-        <header className="mb-10 flex flex-wrap items-center justify-between gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm text-gray-500">Your workspace</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              Your workspace
+            </p>
 
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
               Welcome, {session.user.username}
             </h1>
 
-            <p className="mt-1 text-gray-600">
-              Manage your challenges and track your goals.
+            <p className="mt-2 text-sm text-muted-foreground">
+              Manage your challenges and keep building consistency.
             </p>
           </div>
 
           <SignOutButton />
         </header>
 
-        {/* Main navigation */}
-        <section className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Navigation cards */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {navigationCards.map((card) => {
+            const Icon = card.icon;
 
-          {/* Create challenge */}
-          <Link
-            href="/challenges/new"
-            className="rounded-xl bg-black p-6 text-white transition hover:bg-gray-800"
-          >
-            <h2 className="text-lg font-semibold">
-              Create a challenge
-            </h2>
+            return (
+              <Link
+                key={card.title}
+                href={card.href}
+                className={`group relative flex flex-col justify-between rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                  card.primary
+                    ? "border-primary/20 bg-primary text-primary-foreground hover:bg-primary/90"
+                    : "border-border bg-card hover:border-primary/30"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div
+                    className={`grid size-10 place-items-center rounded-xl ${
+                      card.primary
+                        ? "bg-primary-foreground/15"
+                        : "bg-secondary text-secondary-foreground"
+                    }`}
+                  >
+                    <Icon className="size-5" />
+                  </div>
 
-            <p className="mt-2 text-sm text-gray-300">
-              Turn your next goal into a challenge.
-            </p>
-          </Link>
+                  {"badge" in card &&
+                    typeof card.badge === "number" &&
+                    card.badge > 0 && (
+                      <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white">
+                        {card.badge > 99 ? "99+" : card.badge}
+                      </span>
+                    )}
+                </div>
 
-          {/* Discover challenges */}
-          <Link
-            href="/challenges"
-            className="rounded-xl border bg-white p-6 transition hover:bg-gray-100"
-          >
-            <h2 className="text-lg font-semibold">
-              Discover challenges
-            </h2>
+                <div className="mt-5">
+                  <h2 className="font-semibold tracking-tight">
+                    {card.title}
+                  </h2>
 
-            <p className="mt-2 text-sm text-gray-600">
-              Explore public challenges and find your next goal.
-            </p>
-          </Link>
+                  <p
+                    className={`mt-1.5 text-sm leading-relaxed ${
+                      card.primary
+                        ? "text-primary-foreground/75"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {card.description}
+                  </p>
+                </div>
 
-          {/* Invitations */}
-          <Link
-            href="/invitations"
-            className="relative rounded-xl border bg-white p-6 transition hover:bg-gray-100"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">
-                Invitations
-              </h2>
-
-              {pendingInvitationsCount > 0 && (
-                <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white">
-                  {pendingInvitationsCount > 99
-                    ? "99+"
-                    : pendingInvitationsCount}
-                </span>
-              )}
-            </div>
-
-            <p className="mt-2 text-sm text-gray-600">
-              View and respond to your challenge invitations.
-            </p>
-
-            {pendingInvitationsCount > 0 && (
-              <p className="mt-3 text-xs font-medium text-red-600">
-                You have {pendingInvitationsCount} pending{" "}
-                {pendingInvitationsCount === 1
-                  ? "invitation"
-                  : "invitations"}
-              </p>
-            )}
-          </Link>
-
-          {/* Profile */}
-          <Link
-            href="/profile"
-            className="rounded-xl border bg-white p-6 transition hover:bg-gray-100"
-          >
-            <h2 className="text-lg font-semibold">
-              My profile
-            </h2>
-
-            <p className="mt-2 text-sm text-gray-600">
-              Manage your account information.
-            </p>
-          </Link>
+                <ArrowRight
+                  className={`absolute bottom-5 right-5 size-4 transition-transform group-hover:translate-x-1 ${
+                    card.primary
+                      ? "text-primary-foreground/70"
+                      : "text-muted-foreground"
+                  }`}
+                />
+              </Link>
+            );
+          })}
         </section>
 
         {/* Statistics */}
-        <section className="mb-10 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border bg-white p-6">
-            <p className="text-sm text-gray-500">
-              Challenges created
-            </p>
+        <section className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5">
+            <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Trophy className="size-5" />
+            </div>
 
-            <p className="mt-2 text-3xl font-bold">
-              {myChallenges.length}
-            </p>
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Challenges created
+              </p>
+
+              <p className="mt-1 text-2xl font-bold tabular-nums">
+                {myChallenges.length}
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-xl border bg-white p-6">
-            <p className="text-sm text-gray-500">
-              Pending invitations
-            </p>
+          <Link
+            href="/invitations"
+            className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/30"
+          >
+            <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              <Mail className="size-5" />
+            </div>
 
-            <p className="mt-2 text-3xl font-bold">
-              {pendingInvitationsCount}
-            </p>
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">
+                Pending invitations
+              </p>
 
-            <Link
-              href="/invitations"
-              className="mt-2 inline-block text-sm font-medium underline"
-            >
-              View invitations
-            </Link>
-          </div>
+              <p className="mt-1 text-2xl font-bold tabular-nums">
+                {pendingInvitationsCount}
+              </p>
+            </div>
+
+            <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+          </Link>
         </section>
 
-        {/* My challenges */}
-        <section>
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-xl font-bold">
-              My challenges
-            </h2>
+        {/* Challenges */}
+        <section className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">
+                My challenges
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your created and ongoing challenges.
+              </p>
+            </div>
 
             <Link
               href="/challenges/new"
-              className="text-sm font-medium underline"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-secondary"
             >
-              Create new
+              <Plus className="size-4" />
+              <span>Create new</span>
             </Link>
           </div>
 
+          {/* Error */}
           {!challengesResult.success && (
-            <p className="text-red-600">
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
               {challengesResult.error}
-            </p>
+            </div>
           )}
 
+          {/* Empty state */}
           {challengesResult.success && myChallenges.length === 0 && (
-            <div className="rounded-xl border border-dashed bg-white p-10 text-center">
-              <h3 className="font-semibold">
+            <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
+              <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-secondary text-muted-foreground">
+                <Sparkles className="size-5" />
+              </div>
+
+              <h3 className="mt-4 font-semibold">
                 No challenges yet
               </h3>
 
-              <p className="mt-2 text-sm text-gray-600">
-                Create your first challenge to get started.
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+                Create your first challenge and invite others to work toward the
+                same goal.
               </p>
 
               <Link
                 href="/challenges/new"
-                className="mt-5 inline-block rounded-md bg-black px-5 py-3 text-white"
+                className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
+                <Plus className="size-4" />
                 Create your first challenge
               </Link>
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {myChallenges.map((challenge) => (
-              <Link
-                key={challenge.id}
-                href={`/challenges/${challenge.id}`}
-                className="rounded-xl border bg-white p-6 transition hover:shadow-md"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold">
-                    {challenge.title}
-                  </h3>
+          {/* Challenge cards */}
+          {myChallenges.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {myChallenges.map((challenge) => (
+                <Link
+                  key={challenge.id}
+                  href={`/challenges/${challenge.id}`}
+                  className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-semibold tracking-tight transition-colors group-hover:text-primary">
+                      {challenge.title}
+                    </h3>
 
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs">
-                    {challenge.status}
-                  </span>
-                </div>
+                    <span className="shrink-0 rounded-full border border-border bg-secondary/70 px-2.5 py-1 text-xs font-medium capitalize text-muted-foreground">
+                      {challenge.status}
+                    </span>
+                  </div>
 
-                <p className="mt-3 line-clamp-2 text-sm text-gray-600">
-                  {challenge.description}
-                </p>
+                  <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                    {challenge.description || "No description provided."}
+                  </p>
 
-                <div className="mt-4 text-xs text-gray-500">
-                  {challenge.category || "Uncategorized"}
-                  {" · "}
-                  Starts {challenge.startDate}
-                </div>
-              </Link>
-            ))}
-          </div>
+                  <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Users className="size-3.5" />
+                      {challenge.category || "Uncategorized"}
+                    </span>
+
+                    <span className="inline-flex items-center gap-1.5">
+                      <CalendarDays className="size-3.5" />
+                      Starts {challenge.startDate}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      View challenge
+                    </span>
+
+                    <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
-
       </div>
     </main>
   );
