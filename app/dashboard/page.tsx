@@ -77,27 +77,61 @@ export default async function DashboardPage() {
     },
   ];
 
+  function getCountryFlag(countryCode?: string | null) {
+  if (!countryCode) return "";
+
+  const code = countryCode.trim().toUpperCase();
+
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+
+  return String.fromCodePoint(
+    ...[...code].map((char) => 127397 + char.charCodeAt(0))
+  );
+}
+
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:py-10">
       <div className="mx-auto max-w-6xl space-y-8">
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">
-              Your workspace
-            </p>
+  <div className="flex min-w-0 items-center gap-4">
+    {/* User image */}
+    <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted">
+      {session.user.image ? (
+        <img
+          src={session.user.image}
+          alt={session.user.username}
+          className="size-full object-cover"
+        />
+      ) : (
+        <span className="text-lg font-semibold text-muted-foreground">
+          {session.user.username?.charAt(0).toUpperCase()}
+        </span>
+      )}
+    </div>
 
-            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-              Welcome, {session.user.username}
-            </h1>
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-muted-foreground">
+        Your workspace
+      </p>
 
-            <p className="mt-2 text-sm text-muted-foreground">
-              Manage your challenges and keep building consistency.
-            </p>
-          </div>
+      <h1 className="mt-1 truncate text-2xl font-bold tracking-tight sm:text-3xl">
+        Welcome, {session.user.username}
+      </h1>
 
-          <SignOutButton />
-        </header>
+      <div className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+        {session.user.country && (
+          <>
+            <span>{getCountryFlag(session.user.country)}</span>
+            <span>{session.user.country}</span>
+          </>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <SignOutButton />
+</header>
 
         {/* Navigation cards */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

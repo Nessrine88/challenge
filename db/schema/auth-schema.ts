@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -18,7 +18,10 @@ export const user = pgTable("user", {
   banExpires: timestamp("ban_expires"),
   username: text("username").notNull(),
   country: text("country"),
-});
+},
+(table) => [
+  uniqueIndex("user_username_unique").on(table.username),]
+);
 
 export const session = pgTable(
   "session",

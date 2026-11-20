@@ -623,6 +623,7 @@ const participants = await db
     membershipId: challengeMembers.id,
     participantId: challengeMembers.userId,
     participantUsername: user.username,
+    participantImage: user.image,
   })
   .from(challengeMembers)
   .innerJoin(

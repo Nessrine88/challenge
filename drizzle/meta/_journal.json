@@ -50,6 +50,13 @@
       "when": 1795174110827,
       "tag": "0006_yellow_songbird",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795196913477,
+      "tag": "0007_smart_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

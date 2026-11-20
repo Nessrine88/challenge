@@ -41,6 +41,7 @@ type CalendarParticipant = {
   membershipId: string;
   participantId: string;
   participantUsername: string;
+  participantImage: string | null;
 };
 
 type Props = {
@@ -357,35 +358,39 @@ export function ChallengeCalendar({
             >
               {/* Participant */}
               <td className="sticky left-0 z-10 min-w-44 border-r border-border bg-card px-3 py-3 sm:min-w-52 sm:px-4">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                      isCurrentUser
-                        ? "bg-primary/10 text-primary"
-                        : "bg-secondary text-secondary-foreground"
-                    }`}
-                  >
-                    {participant.participantUsername
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
+  <div className="flex items-center gap-2.5">
+    <div
+      className={`flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold ${
+        isCurrentUser
+          ? "bg-primary/10 text-primary"
+          : "bg-secondary text-secondary-foreground"
+      }`}
+    >
+      {participant.participantImage ? (
+        <img
+          src={participant.participantImage}
+          alt={participant.participantUsername}
+          className="size-full object-cover"
+        />
+      ) : (
+        participant.participantUsername.charAt(0).toUpperCase()
+      )}
+    </div>
 
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {participant.participantUsername}
-                      {isCurrentUser && (
-                        <span className="ml-1.5 text-xs text-primary">
-                          (You)
-                        </span>
-                      )}
-                    </p>
+    <div className="min-w-0">
+      <p className="truncate text-sm font-medium">
+        {participant.participantUsername}
+        {isCurrentUser && (
+          <span className="ml-1.5 text-xs text-primary">(You)</span>
+        )}
+      </p>
 
-                    <p className="text-[11px] text-muted-foreground">
-                      {isCurrentUser ? "Your progress" : "Participant"}
-                    </p>
-                  </div>
-                </div>
-              </td>
+      <p className="text-[11px] text-muted-foreground">
+        {isCurrentUser ? "Your progress" : "Participant"}
+      </p>
+    </div>
+  </div>
+</td>
 
               {/* Progress cells */}
               {dates.map((date) => {
