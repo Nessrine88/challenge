@@ -73,12 +73,7 @@ export default async function InvitationsPage() {
               }}
             />
 
-            <Link
-              href={`/challenges/${invitation.challengeId}`}
-              className="text-sm underline"
-            >
-              View challenge
-            </Link>
+           
           </article>
         ))}
       </div>

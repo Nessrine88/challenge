@@ -4,7 +4,7 @@ import { z } from "zod";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { challenges } from "@/db/schema/challenge-schema";
@@ -228,19 +228,38 @@ export async function getMyChallengesAction() {
   }
 
   try {
+    // Challenges the user is currently an active participant in
+    const joinedChallengeIds = db
+      .select({ id: challengeMembers.challengeId })
+      .from(challengeMembers)
+      .where(
+        and(
+          eq(challengeMembers.userId, session.user.id),
+          isNull(challengeMembers.leftAt),
+        ),
+      );
+
+    // Created by the user OR joined by the user (public or private)
     const results = await db
       .select({
         id: challenges.id,
         title: challenges.title,
         description: challenges.description,
         category: challenges.category,
+        visibility: challenges.visibility,
         status: challenges.status,
         startDate: challenges.startDate,
         endDate: challenges.endDate,
         createdAt: challenges.createdAt,
+        creatorId: challenges.creatorId,
       })
       .from(challenges)
-      .where(eq(challenges.creatorId, session.user.id))
+      .where(
+        or(
+          eq(challenges.creatorId, session.user.id),
+          inArray(challenges.id, joinedChallengeIds),
+        ),
+      )
       .orderBy(desc(challenges.createdAt));
 
     return { success: true as const, challenges: results };

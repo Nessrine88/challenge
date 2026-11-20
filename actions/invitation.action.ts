@@ -573,12 +573,14 @@ export async function respondToChallengeInvitationAction(
     revalidatePath(`/challenges/${challengeId}`);
     revalidatePath("/dashboard");
 
-    return {
+        return {
       success: true as const,
       message:
         decision === "accepted"
           ? "You joined the challenge successfully."
           : "Invitation declined.",
+      challengeId,
+      decision,
     };
   } catch (error) {
     console.error("Respond to invitation error:", error);

@@ -1,7 +1,7 @@
-
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { respondToChallengeInvitationAction } from "@/actions/invitation.action";
 
@@ -16,6 +16,7 @@ type Props = {
 };
 
 export function InvitationActions({ invitation }: Props) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -31,16 +32,23 @@ export function InvitationActions({ invitation }: Props) {
 
       if (!result.success) {
         setMessage(result.error);
+        setLoading(false);
         return;
       }
 
       setMessage(result.message);
 
-      // Refresh the server-rendered invitation list.
-      window.location.reload();
+      if (result.decision === "accepted") {
+        // Keep the buttons disabled while navigating to the challenge.
+        router.push(`/challenges/${result.challengeId}`);
+        return;
+      }
+
+      // Declined: refresh the server-rendered invitation list.
+      router.refresh();
+      setLoading(false);
     } catch {
       setMessage("Unable to process invitation.");
-    } finally {
       setLoading(false);
     }
   }
